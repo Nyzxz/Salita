@@ -1,0 +1,13 @@
+{
+  "name": "@filipino-explorer/shared",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Type contracts shared between the client and server.",
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3"
+  }
+}

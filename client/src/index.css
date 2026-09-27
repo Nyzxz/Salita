@@ -1,0 +1,41 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    @apply border-night-border;
+  }
+  body {
+    @apply font-body;
+  }
+  h1,
+  h2,
+  h3 {
+    @apply font-display;
+  }
+  /* Visible keyboard focus everywhere, in place of Tailwind's default ring. */
+  :focus-visible {
+    @apply outline outline-2 outline-offset-2 outline-gold;
+  }
+}
+
+@layer utilities {
+  .timeline-spine {
+    background-image: linear-gradient(
+      to bottom,
+      theme('colors.gold.DEFAULT') 0%,
+      theme('colors.night.border') 100%
+    );
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
