@@ -33,7 +33,6 @@ export function errorHandler(
   const message = err instanceof Error ? err.message : 'Unexpected server error.';
 
   if (status === 500) {
-    // eslint-disable-next-line no-console
     console.error('[unhandled error]', err);
   }
 

@@ -89,7 +89,7 @@ npm run dev:client     # http://localhost:5173
 
 ```bash
 npm run build          # builds server (dist/) then client (dist/)
-npm run start           # runs the built server from server/dist/index.js
+npm run start           # runs the built server from server/dist/server/src/index.js
 ```
 
 The built client (`client/dist/`) is static output — serve it from any

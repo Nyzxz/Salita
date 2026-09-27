@@ -30,7 +30,6 @@ export function useAsync<T>(fetcher: () => Promise<T>, deps: DependencyList): As
           setState({ data: null, isLoading: false, error: message });
         }
       });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, deps);
 
   return state;
