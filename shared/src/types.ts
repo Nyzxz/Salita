@@ -92,3 +92,24 @@ export interface ApiResponse<T> {
   /** Present only when `success` is false. */
   error?: string;
 }
+
+export type UserRole = 'STUDENT' | 'TEACHER';
+
+export interface User {
+  id: string;
+  username: string;
+  name: string;
+  role: UserRole;
+}
+
+export interface LoginRequest {
+  username: string;
+  password: string;
+  role: UserRole;
+}
+
+export interface AuthSession {
+  user: User;
+  token: string;
+  expiresAt: string;
+}

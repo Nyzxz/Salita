@@ -13,12 +13,15 @@ export class ApiRequestError extends Error {
   }
 }
 
-/**
- * GETs `path` (e.g. "/api/words") and unwraps the shared `ApiResponse<T>` envelope,
- * throwing an `ApiRequestError` if the network call, JSON parse, or server-reported
- * `success` flag indicates failure.
- */
-export async function apiGet<T>(path: string, searchParams?: Record<string, string>): Promise<T> {
+interface RequestOptions {
+  method?: 'GET' | 'POST';
+  searchParams?: Record<string, string>;
+  body?: unknown;
+  token?: string;
+}
+
+async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
+  const { method = 'GET', searchParams, body, token } = options;
   const url = new URL(`${BASE_URL}${path}`, window.location.origin);
   if (searchParams) {
     for (const [key, value] of Object.entries(searchParams)) {
@@ -29,7 +32,13 @@ export async function apiGet<T>(path: string, searchParams?: Record<string, stri
   let response: Response;
   try {
     response = await fetch(url.toString(), {
-      headers: { Accept: 'application/json' },
+      method,
+      headers: {
+        Accept: 'application/json',
+        ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}),
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: body !== undefined ? JSON.stringify(body) : undefined,
     });
   } catch {
     throw new ApiRequestError('Could not reach the server. Is it running?');
@@ -47,4 +56,16 @@ export async function apiGet<T>(path: string, searchParams?: Record<string, stri
   }
 
   return payload.data;
+}
+
+export function apiGet<T>(
+  path: string,
+  searchParams?: Record<string, string>,
+  token?: string,
+): Promise<T> {
+  return request<T>(path, { searchParams, token });
+}
+
+export function apiPost<T>(path: string, body: unknown, token?: string): Promise<T> {
+  return request<T>(path, { method: 'POST', body, token });
 }

@@ -1,4 +1,6 @@
-import type { Section } from '../../App';
+import type { Section } from '../../pages/ExplorerPage';
+import { Link, useNavigate } from 'react-router-dom';
+import { useAuth } from '../../auth/AuthContext';
 
 interface HeaderProps {
   activeSection: Section;
@@ -12,6 +14,14 @@ const NAV_ITEMS: { id: Section; label: string }[] = [
 ];
 
 export function Header({ activeSection, onChangeSection }: HeaderProps) {
+  const { session, logout } = useAuth();
+  const navigate = useNavigate();
+
+  const handleSignOut = () => {
+    logout();
+    navigate('/login', { replace: true });
+  };
+
   return (
     <header className="border-b border-night-border bg-night/95 backdrop-blur">
       <div className="mx-auto flex max-w-5xl flex-col gap-6 px-6 py-6 sm:flex-row sm:items-end sm:justify-between">
@@ -25,26 +35,46 @@ export function Header({ activeSection, onChangeSection }: HeaderProps) {
           </p>
         </div>
 
-        <nav aria-label="Sections" className="flex gap-1 self-start rounded-full bg-night-panel p-1">
-          {NAV_ITEMS.map((item) => {
-            const isActive = item.id === activeSection;
-            return (
+        <div className="flex flex-wrap items-center gap-3">
+          <nav aria-label="Sections" className="flex gap-1 rounded-full bg-night-panel p-1">
+            {NAV_ITEMS.map((item) => {
+              const isActive = item.id === activeSection;
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => onChangeSection(item.id)}
+                  aria-current={isActive ? 'page' : undefined}
+                  className={`rounded-full px-4 py-2 text-sm font-medium transition-colors ${
+                    isActive ? 'bg-gold text-night' : 'text-muted hover:text-parchment'
+                  }`}
+                >
+                  {item.label}
+                </button>
+              );
+            })}
+          </nav>
+
+          {session ? (
+            <div className="flex items-center gap-3">
+              <span className="text-sm text-muted">{session.user.name}</span>
               <button
-                key={item.id}
                 type="button"
-                onClick={() => onChangeSection(item.id)}
-                aria-current={isActive ? 'page' : undefined}
-                className={`rounded-full px-4 py-2 text-sm font-medium transition-colors ${
-                  isActive
-                    ? 'bg-gold text-night'
-                    : 'text-muted hover:text-parchment'
-                }`}
+                onClick={handleSignOut}
+                className="rounded-full border border-gold/60 px-4 py-2 text-sm font-medium text-gold transition-colors hover:bg-gold/10"
               >
-                {item.label}
+                Sign out
               </button>
-            );
-          })}
-        </nav>
+            </div>
+          ) : (
+            <Link
+              to="/login"
+              className="rounded-full border border-gold/60 px-4 py-2 text-sm font-medium text-gold transition-colors hover:bg-gold/10"
+            >
+              Sign in
+            </Link>
+          )}
+        </div>
       </div>
     </header>
   );

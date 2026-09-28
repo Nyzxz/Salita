@@ -1,26 +1,36 @@
-import { useState } from 'react';
-import { Footer } from './components/layout/Footer';
-import { Header } from './components/layout/Header';
-import { QuizModule } from './components/quiz/QuizModule';
-import { Timeline } from './components/timeline/Timeline';
-import { VocabExplorer } from './components/vocab/VocabExplorer';
-
-export type Section = 'explore' | 'timeline' | 'practice';
+import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
+import { AuthProvider } from './auth/AuthContext';
+import { ProtectedRoute } from './auth/ProtectedRoute';
+import { LoginPage } from './pages/LoginPage';
+import { StudentDashboard } from './pages/StudentDashboard';
+import { TeacherDashboard } from './pages/TeacherDashboard';
 
 export default function App() {
-  const [activeSection, setActiveSection] = useState<Section>('explore');
-
   return (
-    <div className="flex min-h-screen flex-col">
-      <Header activeSection={activeSection} onChangeSection={setActiveSection} />
-
-      <main className="mx-auto w-full max-w-5xl flex-1 px-6 py-10">
-        {activeSection === 'explore' && <VocabExplorer />}
-        {activeSection === 'timeline' && <Timeline />}
-        {activeSection === 'practice' && <QuizModule />}
-      </main>
-
-      <Footer />
-    </div>
+    <BrowserRouter>
+      <AuthProvider>
+        <Routes>
+          <Route path="/" element={<Navigate to="/login" replace />} />
+          <Route path="/login" element={<LoginPage />} />
+          <Route
+            path="/dashboard/student"
+            element={
+              <ProtectedRoute role="STUDENT">
+                <StudentDashboard />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/dashboard/admin"
+            element={
+              <ProtectedRoute role="TEACHER">
+                <TeacherDashboard />
+              </ProtectedRoute>
+            }
+          />
+          <Route path="*" element={<Navigate to="/login" replace />} />
+        </Routes>
+      </AuthProvider>
+    </BrowserRouter>
   );
 }

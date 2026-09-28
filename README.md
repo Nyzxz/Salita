@@ -104,6 +104,23 @@ npm run lint           # ESLint across client/server/shared
 npm run format          # Prettier, writes in place
 ```
 
+## Sign-in
+
+The sign-in page is the landing page. Students see the vocabulary explorer,
+language timeline, and practice module inside their protected student account.
+Teachers see their role-specific dashboard.
+
+| Role | Username | Password |
+| --- | --- | --- |
+| Teacher | `teacher` | `` |
+| Student | `maria` | `student123` |
+| Student | `jun` | `student123` |
+
+The session token expires after eight hours. Before deploying to Vercel, set a
+private `AUTH_SECRET` environment variable in the project settings and redeploy.
+Production auth refuses to use the development fallback secret. These accounts
+are in-memory demo data; real accounts require a database and hashed passwords.
+
 ## API reference
 
 All responses use the shared envelope:
