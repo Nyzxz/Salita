@@ -31,7 +31,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
     return;
   }
 
-  const result = gradeSubmission(id, request);
+  const result = await gradeSubmission(id, request);
   if ('error' in result) {
     res.status(result.status).json({ success: false, data: null, error: result.error });
     return;

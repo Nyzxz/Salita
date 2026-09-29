@@ -10,21 +10,25 @@ export const submissionsRouter = Router();
 submissionsRouter.use(requireAuth('STUDENT'));
 
 /** GET /api/submissions/me */
-submissionsRouter.get('/me', (_req, res) => {
+submissionsRouter.get('/me', (_req, res, next) => {
   const user = res.locals.user as User;
-  const body: ApiResponse<SubmissionRecord[]> = { success: true, data: getMySubmissions(user) };
-  res.json(body);
+  void getMySubmissions(user)
+    .then((submissions) => {
+      const body: ApiResponse<SubmissionRecord[]> = { success: true, data: submissions };
+      res.json(body);
+    })
+    .catch(next);
 });
 
 /** POST /api/submissions  { taskId, content } — creates or resubmits. */
-submissionsRouter.post('/', (req, res, next) => {
+submissionsRouter.post('/', async (req, res, next) => {
   try {
     const request = parseCreateSubmissionRequest(req.body);
     if (!request) {
       throw new ApiError(400, 'Choose a task and write a submission before sending.');
     }
     const user = res.locals.user as User;
-    const result = submitWork(user, request);
+    const result = await submitWork(user, request);
     if (!result.ok) throw new ApiError(result.status, result.error);
 
     const body: ApiResponse<SubmissionRecord> = { success: true, data: result.data };

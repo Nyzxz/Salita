@@ -25,20 +25,24 @@ adminRouter.get('/students', (_req, res, next) => {
 });
 
 /** GET /api/admin/submissions */
-adminRouter.get('/submissions', (_req, res) => {
-  const body: ApiResponse<SubmissionRecord[]> = { success: true, data: getAllSubmissions() };
-  res.json(body);
+adminRouter.get('/submissions', (_req, res, next) => {
+  void getAllSubmissions()
+    .then((submissions) => {
+      const body: ApiResponse<SubmissionRecord[]> = { success: true, data: submissions };
+      res.json(body);
+    })
+    .catch(next);
 });
 
 /** PUT /api/admin/submissions/:id */
-adminRouter.put('/submissions/:id', (req, res, next) => {
+adminRouter.put('/submissions/:id', async (req, res, next) => {
   try {
     const request = parseGradeSubmissionRequest(req.body);
     if (!request) {
       throw new ApiError(400, 'Enter a valid grade and optional feedback before saving.');
     }
 
-    const result = gradeSubmission(req.params.id, request);
+    const result = await gradeSubmission(req.params.id, request);
     if (!result.ok) throw new ApiError(result.status, result.error);
 
     const body: ApiResponse<SubmissionRecord> = { success: true, data: result.data };

@@ -14,6 +14,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
     res.status(403).json({ success: false, data: null, error: 'Your account is not allowed to do that.' });
     return;
   }
-  const body: ApiResponse<SubmissionRecord[]> = { success: true, data: getMySubmissions(user) };
+  const body: ApiResponse<SubmissionRecord[]> = { success: true, data: await getMySubmissions(user) };
   res.status(200).json(body);
 }

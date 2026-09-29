@@ -21,6 +21,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
     return;
   }
 
-  const body: ApiResponse<SubmissionRecord[]> = { success: true, data: getAllSubmissions() };
+  const body: ApiResponse<SubmissionRecord[]> = { success: true, data: await getAllSubmissions() };
   res.status(200).json(body);
 }
