@@ -1,4 +1,3 @@
-import 'dotenv/config';
 import mongoose from 'mongoose';
 
 let connectionPromise: Promise<typeof mongoose> | null = null;
