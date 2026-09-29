@@ -30,7 +30,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
       return;
     }
     const result = await addStudent(request);
-    if (!result.ok) {
+    if ('error' in result) {
       res.status(result.status).json({ success: false, data: null, error: result.error });
       return;
     }
