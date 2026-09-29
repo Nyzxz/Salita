@@ -4,8 +4,8 @@ import { getUserFromAuthHeader } from '../../server/src/auth/auth.service.js';
 import { TASKS } from '../../server/src/data/tasks.data.js';
 
 // Vercel equivalent of GET /api/tasks in server/src/routes/tasks.routes.ts.
-export default function handler(req: VercelRequest, res: VercelResponse): void {
-  const user = getUserFromAuthHeader(req.headers.authorization);
+export default async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
+  const user = await getUserFromAuthHeader(req.headers.authorization);
   if (!user) {
     res.status(401).json({ success: false, data: null, error: 'You need to sign in to do that.' });
     return;

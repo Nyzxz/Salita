@@ -3,14 +3,7 @@ import type {
   StudentAccount,
   UpdateStudentRequest,
 } from '../../../shared/src/types.js';
-import {
-  createStudent,
-  findStudentById,
-  findStudentByUsername,
-  listStudents,
-  toPublicStudent,
-  updateStudent,
-} from '../data/students.store.js';
+import { User as UserModel, type UserDocument } from '../models/User.js';
 
 export type ServiceResult<T> = { ok: true; data: T } | { ok: false; status: number; error: string };
 
@@ -70,34 +63,90 @@ export function parseUpdateStudentRequest(body: unknown): UpdateStudentRequest |
   return result;
 }
 
-export function getAllStudents(): StudentAccount[] {
-  return listStudents().map(toPublicStudent);
+function toStudentAccount(record: UserDocument): StudentAccount {
+  return {
+    id: String(record._id),
+    fullName: record.fullName,
+    username: record.username,
+    email: record.email,
+    section: record.section ?? '',
+    createdAt: record.createdAt.toISOString(),
+    status: record.status,
+  };
 }
 
-export function addStudent(request: CreateStudentRequest): ServiceResult<StudentAccount> {
+function isDuplicateKeyError(error: unknown): boolean {
+  return typeof error === 'object' && error !== null && 'code' in error && error.code === 11000;
+}
+
+export async function getAllStudents(): Promise<StudentAccount[]> {
+  const records = await UserModel.find({ role: 'STUDENT' }).sort({ createdAt: -1 });
+  return records.map(toStudentAccount);
+}
+
+export async function addStudent(
+  request: CreateStudentRequest,
+): Promise<ServiceResult<StudentAccount>> {
   if (request.password.length < 6) {
     return { ok: false, status: 400, error: 'Password must be at least 6 characters.' };
   }
   if (!EMAIL_PATTERN.test(request.email)) {
     return { ok: false, status: 400, error: 'Enter a valid email address.' };
   }
-  if (findStudentByUsername(request.username)) {
+  const existing = await UserModel.exists({ username: request.username.toLowerCase() });
+  if (existing) {
     return { ok: false, status: 409, error: `Username "${request.username}" is already taken.` };
   }
-  const record = createStudent(request);
-  return { ok: true, data: toPublicStudent(record) };
+
+  try {
+    const record = await UserModel.create({
+      fullName: request.fullName,
+      username: request.username.toLowerCase(),
+      email: request.email.toLowerCase(),
+      password: request.password,
+      role: 'STUDENT',
+      section: request.section,
+    });
+    return { ok: true, data: toStudentAccount(record) };
+  } catch (error) {
+    if (isDuplicateKeyError(error)) {
+      return { ok: false, status: 409, error: 'That username or email is already in use.' };
+    }
+    throw error;
+  }
 }
 
-export function editStudent(id: string, patch: UpdateStudentRequest): ServiceResult<StudentAccount> {
+export async function editStudent(
+  id: string,
+  patch: UpdateStudentRequest,
+): Promise<ServiceResult<StudentAccount>> {
   if (patch.password !== undefined && patch.password.length < 6) {
     return { ok: false, status: 400, error: 'Password must be at least 6 characters.' };
   }
   if (patch.email !== undefined && !EMAIL_PATTERN.test(patch.email)) {
     return { ok: false, status: 400, error: 'Enter a valid email address.' };
   }
-  if (!findStudentById(id)) {
-    return { ok: false, status: 404, error: `No student found with id "${id}".` };
+
+  try {
+    const record = await UserModel.findOne({ _id: id, role: 'STUDENT' });
+    if (!record) {
+      return { ok: false, status: 404, error: `No student found with id "${id}".` };
+    }
+
+    if (patch.fullName !== undefined) record.fullName = patch.fullName;
+    if (patch.email !== undefined) record.email = patch.email.toLowerCase();
+    if (patch.section !== undefined) record.section = patch.section;
+    if (patch.status !== undefined) record.status = patch.status;
+    if (patch.password !== undefined) record.password = patch.password;
+    await record.save();
+    return { ok: true, data: toStudentAccount(record) };
+  } catch (error) {
+    if (isDuplicateKeyError(error)) {
+      return { ok: false, status: 409, error: 'That email is already in use.' };
+    }
+    if (typeof error === 'object' && error !== null && 'name' in error && error.name === 'CastError') {
+      return { ok: false, status: 404, error: `No student found with id "${id}".` };
+    }
+    throw error;
   }
-  const updated = updateStudent(id, patch);
-  return { ok: true, data: toPublicStudent(updated!) };
 }

@@ -2,7 +2,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import type { ApiResponse, AuthSession } from '../../../shared/src/types.js';
 import { login, parseLoginRequest } from '../../../server/src/auth/auth.service.js';
 
-export default function handler(req: VercelRequest, res: VercelResponse): void {
+export default async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
   if (req.method !== 'POST') {
     res.setHeader('Allow', 'POST');
     res.status(405).json({ success: false, data: null, error: 'Use POST to sign in.' });
@@ -20,7 +20,7 @@ export default function handler(req: VercelRequest, res: VercelResponse): void {
     return;
   }
 
-  const session = login(request);
+  const session = await login(request);
   if (!session) {
     const body: ApiResponse<null> = {
       success: false,

@@ -2,9 +2,9 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import type { ApiResponse, User } from '../../../shared/src/types.js';
 import { getUserFromAuthHeader } from '../../../server/src/auth/auth.service.js';
 
-export default function handler(req: VercelRequest, res: VercelResponse): void {
+export default async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
   const header = req.headers.authorization;
-  const user = getUserFromAuthHeader(typeof header === 'string' ? header : undefined);
+  const user = await getUserFromAuthHeader(typeof header === 'string' ? header : undefined);
 
   if (!user) {
     const body: ApiResponse<null> = {

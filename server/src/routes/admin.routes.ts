@@ -15,9 +15,13 @@ export const adminRouter = Router();
 adminRouter.use(requireAuth('TEACHER'));
 
 /** GET /api/admin/students */
-adminRouter.get('/students', (_req, res) => {
-  const body: ApiResponse<StudentAccount[]> = { success: true, data: getAllStudents() };
-  res.json(body);
+adminRouter.get('/students', (_req, res, next) => {
+  void getAllStudents()
+    .then((students) => {
+      const body: ApiResponse<StudentAccount[]> = { success: true, data: students };
+      res.json(body);
+    })
+    .catch(next);
 });
 
 /** GET /api/admin/submissions */
@@ -45,13 +49,13 @@ adminRouter.put('/submissions/:id', (req, res, next) => {
 });
 
 /** POST /api/admin/students */
-adminRouter.post('/students', (req, res, next) => {
+adminRouter.post('/students', async (req, res, next) => {
   try {
     const request = parseCreateStudentRequest(req.body);
     if (!request) {
       throw new ApiError(400, 'Fill in full name, username, email, password, and section.');
     }
-    const result = addStudent(request);
+    const result = await addStudent(request);
     if (!result.ok) throw new ApiError(result.status, result.error);
 
     const body: ApiResponse<StudentAccount> = { success: true, data: result.data };
@@ -62,13 +66,13 @@ adminRouter.post('/students', (req, res, next) => {
 });
 
 /** PUT /api/admin/students/:id — partial update: edit details, reset password, or (de)activate. */
-adminRouter.put('/students/:id', (req, res, next) => {
+adminRouter.put('/students/:id', async (req, res, next) => {
   try {
     const patch = parseUpdateStudentRequest(req.body);
     if (!patch) {
       throw new ApiError(400, 'Send at least one field to update.');
     }
-    const result = editStudent(req.params.id, patch);
+    const result = await editStudent(req.params.id, patch);
     if (!result.ok) throw new ApiError(result.status, result.error);
 
     const body: ApiResponse<StudentAccount> = { success: true, data: result.data };

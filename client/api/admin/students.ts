@@ -4,8 +4,8 @@ import { getUserFromAuthHeader } from '../../../server/src/auth/auth.service.js'
 import { addStudent, getAllStudents, parseCreateStudentRequest } from '../../../server/src/admin/students.service.js';
 
 // Vercel equivalent of GET/POST /api/admin/students in server/src/routes/admin.routes.ts.
-export default function handler(req: VercelRequest, res: VercelResponse): void {
-  const user = getUserFromAuthHeader(req.headers.authorization);
+export default async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
+  const user = await getUserFromAuthHeader(req.headers.authorization);
   if (!user) {
     res.status(401).json({ success: false, data: null, error: 'You need to sign in to do that.' });
     return;
@@ -16,7 +16,7 @@ export default function handler(req: VercelRequest, res: VercelResponse): void {
   }
 
   if (req.method === 'GET') {
-    const body: ApiResponse<StudentAccount[]> = { success: true, data: getAllStudents() };
+    const body: ApiResponse<StudentAccount[]> = { success: true, data: await getAllStudents() };
     res.status(200).json(body);
     return;
   }
@@ -29,7 +29,7 @@ export default function handler(req: VercelRequest, res: VercelResponse): void {
         .json({ success: false, data: null, error: 'Fill in full name, username, email, password, and section.' });
       return;
     }
-    const result = addStudent(request);
+    const result = await addStudent(request);
     if (!result.ok) {
       res.status(result.status).json({ success: false, data: null, error: result.error });
       return;

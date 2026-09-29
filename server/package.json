@@ -12,8 +12,11 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "bcryptjs": "^3.0.3",
     "cors": "^2.8.5",
-    "express": "^4.21.1"
+    "dotenv": "^18.0.4",
+    "express": "^4.21.1",
+    "mongoose": "^9.10.2"
   },
   "devDependencies": {
     "@types/cors": "^2.8.17",

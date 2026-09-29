@@ -4,8 +4,8 @@ import { getUserFromAuthHeader } from '../../../../server/src/auth/auth.service.
 import { editStudent, parseUpdateStudentRequest } from '../../../../server/src/admin/students.service.js';
 
 // Vercel equivalent of PUT /api/admin/students/:id in server/src/routes/admin.routes.ts.
-export default function handler(req: VercelRequest, res: VercelResponse): void {
-  const user = getUserFromAuthHeader(req.headers.authorization);
+export default async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
+  const user = await getUserFromAuthHeader(req.headers.authorization);
   if (!user) {
     res.status(401).json({ success: false, data: null, error: 'You need to sign in to do that.' });
     return;
@@ -27,7 +27,7 @@ export default function handler(req: VercelRequest, res: VercelResponse): void {
     return;
   }
 
-  const result = editStudent(id, patch);
+  const result = await editStudent(id, patch);
   if (!result.ok) {
     res.status(result.status).json({ success: false, data: null, error: result.error });
     return;

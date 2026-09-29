@@ -7,8 +7,8 @@ import {
 } from '../../../../server/src/submissions/submissions.service.js';
 
 // Vercel equivalent of PUT /api/admin/submissions/:id in server/src/routes/admin.routes.ts.
-export default function handler(req: VercelRequest, res: VercelResponse): void {
-  const user = getUserFromAuthHeader(req.headers.authorization);
+export default async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
+  const user = await getUserFromAuthHeader(req.headers.authorization);
   if (!user) {
     res.status(401).json({ success: false, data: null, error: 'You need to sign in to do that.' });
     return;

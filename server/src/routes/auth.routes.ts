@@ -6,14 +6,14 @@ import { requireAuth } from '../middleware/requireAuth.js';
 
 export const authRouter = Router();
 
-authRouter.post('/login', (req, res, next) => {
+authRouter.post('/login', async (req, res, next) => {
   try {
     const request = parseLoginRequest(req.body);
     if (!request) {
       throw new ApiError(400, 'Enter your username and password, and choose a role.');
     }
 
-    const session = login(request);
+    const session = await login(request);
     if (!session) {
       throw new ApiError(401, 'Incorrect username, password, or role.');
     }
