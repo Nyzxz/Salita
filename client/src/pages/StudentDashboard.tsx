@@ -29,25 +29,27 @@ export function StudentDashboard() {
       />
 
       <main className="mx-auto w-full max-w-5xl flex-1 px-6 py-10">
-        {activeTab === 'lectures' && <VocabExplorer />}
-        {activeTab === 'quizzes' && <QuizModule />}
-        {activeTab === 'activities' && (
-          <TaskListSection
-            type="ACTIVITY"
-            title="Activities"
-            subtitle="Short tasks tied to what you're currently learning."
-            learning={learning}
-          />
-        )}
-        {activeTab === 'performance' && (
-          <TaskListSection
-            type="PERFORMANCE_TASK"
-            title="Performance tasks"
-            subtitle="Bigger, multi-step tasks worth more points."
-            learning={learning}
-          />
-        )}
-        {activeTab === 'grades' && <GradesSection learning={learning} />}
+        <div key={activeTab} className="animate-fade-in-up">
+          {activeTab === 'lectures' && <VocabExplorer />}
+          {activeTab === 'quizzes' && <QuizModule />}
+          {activeTab === 'activities' && (
+            <TaskListSection
+              type="ACTIVITY"
+              title="Activities"
+              subtitle="Short tasks tied to what you're currently learning."
+              learning={learning}
+            />
+          )}
+          {activeTab === 'performance' && (
+            <TaskListSection
+              type="PERFORMANCE_TASK"
+              title="Performance tasks"
+              subtitle="Bigger, multi-step tasks worth more points."
+              learning={learning}
+            />
+          )}
+          {activeTab === 'grades' && <GradesSection learning={learning} />}
+        </div>
       </main>
     </div>
   );

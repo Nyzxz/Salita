@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../auth/AuthContext';
+import { Avatar } from '../common/Avatar';
 
 interface DashboardShellProps {
   title: string;
@@ -21,22 +22,23 @@ export function DashboardShell({ title, subtitle, children }: DashboardShellProp
 
   return (
     <div className="flex min-h-screen flex-col">
-      <header className="border-b border-night-border">
+      <header className="sticky top-0 z-20 border-b border-night-border bg-night/90 backdrop-blur">
         <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-4 px-6 py-4">
           <Link to="/" className="font-display text-xl font-semibold text-parchment">
             Salita
             <span aria-hidden="true" className="ml-2 inline-block h-1.5 w-6 rounded-full bg-gold" />
           </Link>
 
-          <div className="flex items-center gap-3 text-sm">
-            <span className="text-parchment">{session?.user.name}</span>
-            <span className="rounded-full border border-gold/50 px-2.5 py-0.5 text-xs text-gold">
-              {session ? ROLE_LABEL[session.user.role] : ''}
-            </span>
+          <div className="flex items-center gap-3">
+            <Avatar name={session?.user.name ?? '?'} size="sm" />
+            <div className="hidden text-sm sm:block">
+              <p className="text-parchment">{session?.user.name}</p>
+              <p className="text-xs text-gold">{session ? ROLE_LABEL[session.user.role] : ''}</p>
+            </div>
             <button
               type="button"
               onClick={handleSignOut}
-              className="rounded-md border border-night-border px-3 py-1.5 text-muted transition-colors hover:text-parchment"
+              className="rounded-md border border-night-border px-3 py-1.5 text-sm text-muted transition-colors hover:border-clay/50 hover:text-clay"
             >
               Sign out
             </button>
@@ -44,10 +46,17 @@ export function DashboardShell({ title, subtitle, children }: DashboardShellProp
         </div>
       </header>
 
+      <div className="aurora-backdrop relative overflow-hidden border-b border-night-border">
+        <div className="relative z-10 mx-auto max-w-5xl px-6 py-10">
+          <h1 className="animate-fade-in-up font-display text-3xl font-semibold text-parchment sm:text-4xl">
+            {title}
+          </h1>
+          <p className="animate-fade-in-up mt-2 max-w-prose text-sm text-muted">{subtitle}</p>
+        </div>
+      </div>
+
       <main className="mx-auto w-full max-w-5xl flex-1 px-6 py-10">
-        <h1 className="font-display text-3xl font-semibold text-parchment">{title}</h1>
-        <p className="mt-1 max-w-prose text-sm text-muted">{subtitle}</p>
-        <div className="mt-8">{children}</div>
+        <div className="animate-fade-in">{children}</div>
       </main>
     </div>
   );

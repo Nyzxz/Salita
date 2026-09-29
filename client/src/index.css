@@ -28,6 +28,38 @@
       theme('colors.night.border') 100%
     );
   }
+
+  /*
+   * Two soft, blurred color fields drifting slowly behind a header or hero.
+   * Pure CSS, no images — kept low-opacity so body text stays easy to read.
+   * Apply to a `relative overflow-hidden` container; content needs `relative z-10`.
+   */
+  .aurora-backdrop::before,
+  .aurora-backdrop::after {
+    content: '';
+    position: absolute;
+    border-radius: 9999px;
+    filter: blur(60px);
+    opacity: 0.16;
+    pointer-events: none;
+    z-index: 0;
+  }
+  .aurora-backdrop::before {
+    top: -20%;
+    left: -10%;
+    width: 60%;
+    height: 140%;
+    background: theme('colors.gold.DEFAULT');
+    animation: drift 16s ease-in-out infinite;
+  }
+  .aurora-backdrop::after {
+    bottom: -30%;
+    right: -10%;
+    width: 50%;
+    height: 120%;
+    background: theme('colors.clay');
+    animation: drift 20s ease-in-out infinite reverse;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
