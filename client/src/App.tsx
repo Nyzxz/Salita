@@ -4,6 +4,8 @@ import { ProtectedRoute } from './auth/ProtectedRoute';
 import { LoginPage } from './pages/LoginPage';
 import { StudentDashboard } from './pages/StudentDashboard';
 import { TeacherDashboard } from './pages/TeacherDashboard';
+import { TeacherGradingPage } from './pages/TeacherGradingPage';
+import { UserManagementPage } from './pages/admin/UserManagementPage';
 
 export default function App() {
   return (
@@ -25,6 +27,22 @@ export default function App() {
             element={
               <ProtectedRoute role="TEACHER">
                 <TeacherDashboard />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/dashboard/admin/users"
+            element={
+              <ProtectedRoute role="TEACHER">
+                <UserManagementPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/dashboard/admin/grading"
+            element={
+              <ProtectedRoute role="TEACHER">
+                <TeacherGradingPage />
               </ProtectedRoute>
             }
           />

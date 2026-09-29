@@ -2,6 +2,9 @@ import cors from 'cors';
 import express, { type Express } from 'express';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler.js';
 import { authRouter } from './routes/auth.routes.js';
+import { adminRouter } from './routes/admin.routes.js';
+import { submissionsRouter } from './routes/submissions.routes.js';
+import { tasksRouter } from './routes/tasks.routes.js';
 import { milestonesRouter } from './routes/milestones.routes.js';
 import { quizRouter } from './routes/quiz.routes.js';
 import { wordsRouter } from './routes/words.routes.js';
@@ -12,6 +15,17 @@ export function createApp(): Express {
   app.use(cors());
   app.use(express.json());
 
+  app.get('/', (_req, res) => {
+    res.json({
+      success: true,
+      data: {
+        app: 'Salita API',
+        status: 'ok',
+        docs: '/api/health',
+      },
+    });
+  });
+
   app.get('/api/health', (_req, res) => {
     res.json({ success: true, data: { status: 'ok' } });
   });
@@ -20,6 +34,9 @@ export function createApp(): Express {
   app.use('/api/words', wordsRouter);
   app.use('/api/milestones', milestonesRouter);
   app.use('/api/quiz', quizRouter);
+  app.use('/api/admin', adminRouter);
+  app.use('/api/tasks', tasksRouter);
+  app.use('/api/submissions', submissionsRouter);
 
   app.use(notFoundHandler);
   app.use(errorHandler);

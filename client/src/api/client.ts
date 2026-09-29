@@ -13,8 +13,20 @@ export class ApiRequestError extends Error {
   }
 }
 
+function getErrorMessage(error: unknown): string | undefined {
+  if (typeof error === 'string' && error.trim()) return error;
+  if (!error || typeof error !== 'object') return undefined;
+
+  const record = error as Record<string, unknown>;
+  for (const key of ['message', 'error', 'details']) {
+    const message = getErrorMessage(record[key]);
+    if (message) return message;
+  }
+  return undefined;
+}
+
 interface RequestOptions {
-  method?: 'GET' | 'POST';
+  method?: 'GET' | 'POST' | 'PUT';
   searchParams?: Record<string, string>;
   body?: unknown;
   token?: string;
@@ -52,7 +64,11 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
   }
 
   if (!response.ok || !payload.success) {
-    throw new ApiRequestError(payload.error ?? `Request to ${path} failed.`, response.status);
+    const message = getErrorMessage(payload.error);
+    throw new ApiRequestError(
+      message ?? `Request to ${path} failed (HTTP ${response.status}).`,
+      response.status,
+    );
   }
 
   return payload.data;
@@ -68,4 +84,8 @@ export function apiGet<T>(
 
 export function apiPost<T>(path: string, body: unknown, token?: string): Promise<T> {
   return request<T>(path, { method: 'POST', body, token });
+}
+
+export function apiPut<T>(path: string, body: unknown, token?: string): Promise<T> {
+  return request<T>(path, { method: 'PUT', body, token });
 }

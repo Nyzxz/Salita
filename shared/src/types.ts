@@ -113,3 +113,78 @@ export interface AuthSession {
   token: string;
   expiresAt: string;
 }
+
+// ---------------------------------------------------------------------------
+// Admin: student accounts
+// ---------------------------------------------------------------------------
+
+/** A student account as the teacher's directory is allowed to see it (no password). */
+export interface StudentAccount {
+  id: string;
+  fullName: string;
+  username: string;
+  email: string;
+  section: string;
+  createdAt: string;
+  status: 'ACTIVE' | 'INACTIVE';
+}
+
+/** Body of POST /api/admin/students. */
+export interface CreateStudentRequest {
+  fullName: string;
+  username: string;
+  email: string;
+  password: string;
+  section: string;
+}
+
+/**
+ * Body of PUT /api/admin/students/:id. All fields optional — send only what's
+ * changing. Setting `password` resets it; setting `status` activates/deactivates.
+ */
+export interface UpdateStudentRequest {
+  fullName?: string;
+  email?: string;
+  section?: string;
+  status?: StudentAccount['status'];
+  password?: string;
+}
+
+// ---------------------------------------------------------------------------
+// Activities & Performance Tasks
+// ---------------------------------------------------------------------------
+
+export type TaskType = 'ACTIVITY' | 'PERFORMANCE_TASK';
+
+export interface ActivityTask {
+  id: string;
+  type: TaskType;
+  title: string;
+  description: string;
+  totalPoints: number;
+  /** ISO date string. */
+  dueDate: string;
+}
+
+export interface SubmissionRecord {
+  id: string;
+  taskId: string;
+  studentId: string;
+  studentName: string;
+  submittedContent: string;
+  submittedAt: string;
+  grade?: number;
+  feedback?: string;
+  status: 'PENDING' | 'GRADED';
+}
+
+export interface GradeSubmissionRequest {
+  grade: number;
+  feedback?: string;
+}
+
+/** Body of POST /api/submissions. */
+export interface CreateSubmissionRequest {
+  taskId: string;
+  content: string;
+}

@@ -104,6 +104,46 @@ npm run lint           # ESLint across client/server/shared
 npm run format          # Prettier, writes in place
 ```
 
+## Admin: user management (`/dashboard/admin/users`)
+
+Teachers can create and manage student accounts from the dashboard's "User
+management" tile:
+
+- **Create a student** — full name, username, email, initial password (6+
+  characters), and section. Usernames must be unique; the form shows a clear
+  error if one's taken.
+- **Student directory** — every account, with a quick "Reset password" and
+  "Deactivate"/"Reactivate" action per row. Deactivating a student blocks
+  sign-in immediately, even if they're already holding a valid session token.
+- Created accounts can log in right away at `/login` as a student — the
+  directory *is* the login list (`server/src/data/students.store.ts`), not a
+  separate record.
+
+API: `GET`/`POST /api/admin/students`, `PUT /api/admin/students/:id`
+(partial update — send only the fields changing). All three require a
+teacher's token; see `server/src/admin/students.service.ts` for validation
+rules and `server/src/routes/admin.routes.ts` / `client/api/admin/` for the
+Express and Vercel versions.
+
+## Student dashboard (`/dashboard/student`)
+
+A five-tab LMS view, all sharing one top nav:
+
+| Tab | What it shows |
+| --- | --- |
+| Lectures | The vocabulary explorer (word cards, pronunciation, origin badges) |
+| Quizzes | The flashcards/quiz module |
+| Activities | `ACTIVITY`-type tasks, each with a submission box |
+| Performance Tasks | `PERFORMANCE_TASK`-type tasks, same submission flow |
+| My Grades | A table of everything submitted, with score and feedback once graded |
+
+Submitting a task calls `POST /api/submissions`; resubmitting the same task
+overwrites the previous submission and resets it to "Pending". There is no
+teacher-facing grading UI yet — `grade`/`feedback` exist on `SubmissionRecord`
+and will show up in "My Grades" as soon as something writes them, but nothing
+does yet. `server/src/data/tasks.data.ts` is a short, read-only mock list;
+there's no task-creation UI either yet.
+
 ## Sign-in
 
 The sign-in page is the landing page. Students see the vocabulary explorer,
@@ -120,6 +160,10 @@ The session token expires after eight hours. Before deploying to Vercel, set a
 private `AUTH_SECRET` environment variable in the project settings and redeploy.
 Production auth refuses to use the development fallback secret. These accounts
 are in-memory demo data; real accounts require a database and hashed passwords.
+On Vercel specifically, a student created through the admin panel, or a
+submission a student turns in, does not reliably persist across requests —
+serverless functions don't share memory between invocations. Everything here
+works fully for local `npm run dev` (one long-running process).
 
 ## API reference
 
@@ -135,6 +179,12 @@ All responses use the shared envelope:
 | GET    | `/api/milestones`        | The full language history timeline, oldest first.     |
 | GET    | `/api/quiz`              | All quiz questions.                                   |
 | GET    | `/api/quiz?count=5`      | A random subset of `count` questions.                 |
+| GET    | `/api/admin/students`    | Student directory. Teacher only.                       |
+| POST   | `/api/admin/students`    | Create a student account. Teacher only.                |
+| PUT    | `/api/admin/students/:id`| Partial update — details, password reset, or status. Teacher only. |
+| GET    | `/api/tasks`             | All activities and performance tasks. Any signed-in user. |
+| GET    | `/api/submissions/me`    | The signed-in student's own submissions.               |
+| POST   | `/api/submissions`       | Submit or resubmit `{ taskId, content }`. Student only. |
 
 ## Design notes
 

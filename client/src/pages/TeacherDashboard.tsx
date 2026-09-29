@@ -15,6 +15,7 @@ export function TeacherDashboard() {
           {
             title: 'User management',
             description: 'Create student accounts and assign usernames and passwords.',
+            href: '/dashboard/admin/users',
           },
           {
             title: 'Content studio',
@@ -23,6 +24,7 @@ export function TeacherDashboard() {
           {
             title: 'Grading center',
             description: 'Review student submissions, enter scores, and leave feedback.',
+            href: '/dashboard/admin/grading',
           },
         ]}
       />
