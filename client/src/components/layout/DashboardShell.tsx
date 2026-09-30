@@ -23,7 +23,7 @@ export function DashboardShell({ title, subtitle, children }: DashboardShellProp
   return (
     <div className="flex min-h-screen flex-col">
       <header className="sticky top-0 z-20 border-b border-night-border bg-night/90 backdrop-blur">
-        <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-4 px-6 py-4">
+        <div className="mx-auto flex max-w-[1280px] flex-wrap items-center justify-between gap-4 px-4 py-4 sm:px-6 xl:px-8">
           <Link to="/" className="font-display text-xl font-semibold text-parchment">
             Salita
             <span aria-hidden="true" className="ml-2 inline-block h-1.5 w-6 rounded-full bg-gold" />
@@ -47,7 +47,7 @@ export function DashboardShell({ title, subtitle, children }: DashboardShellProp
       </header>
 
       <div className="aurora-backdrop relative overflow-hidden border-b border-night-border">
-        <div className="relative z-10 mx-auto max-w-5xl px-6 py-10">
+        <div className="relative z-10 mx-auto max-w-[1280px] px-4 py-10 sm:px-6 xl:px-8">
           <h1 className="animate-fade-in-up font-display text-3xl font-semibold text-parchment sm:text-4xl">
             {title}
           </h1>
@@ -55,7 +55,7 @@ export function DashboardShell({ title, subtitle, children }: DashboardShellProp
         </div>
       </div>
 
-      <main className="mx-auto w-full max-w-5xl flex-1 px-6 py-10">
+      <main className="mx-auto w-full max-w-[1280px] flex-1 px-4 py-10 sm:px-6 xl:px-8">
         <div className="animate-fade-in">{children}</div>
       </main>
     </div>

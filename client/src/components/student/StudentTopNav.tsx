@@ -35,7 +35,7 @@ export function StudentTopNav({ activeTab, onChangeTab, studentName, onSignOut }
 
   return (
     <header className="sticky top-0 z-20 border-b border-night-border bg-night/90 backdrop-blur">
-      <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-4 px-6 py-4">
+      <div className="mx-auto flex max-w-[1280px] flex-wrap items-center justify-between gap-4 px-4 py-4 sm:px-6 xl:px-8">
         <Link to="/dashboard/student" className="font-display text-xl font-semibold text-parchment">
           Salita
           <span aria-hidden="true" className="ml-2 inline-block h-1.5 w-6 rounded-full bg-gold" />
@@ -54,7 +54,7 @@ export function StudentTopNav({ activeTab, onChangeTab, studentName, onSignOut }
         </div>
       </div>
 
-      <nav aria-label="Dashboard sections" className="mx-auto max-w-5xl overflow-x-auto px-6 pb-4">
+      <nav aria-label="Dashboard sections" className="mx-auto max-w-[1280px] overflow-x-auto px-4 pb-4 sm:px-6 xl:px-8">
         <div className="relative flex w-max gap-1">
           <span
             aria-hidden="true"

@@ -28,7 +28,7 @@ export function StudentDashboard() {
         onSignOut={handleSignOut}
       />
 
-      <main className="mx-auto w-full max-w-5xl flex-1 px-6 py-10">
+      <main className="mx-auto w-full max-w-[1280px] flex-1 px-4 py-10 sm:px-6 xl:px-8">
         <div key={activeTab} className="animate-fade-in-up">
           {activeTab === 'lectures' && <VocabExplorer />}
           {activeTab === 'quizzes' && <QuizModule />}
