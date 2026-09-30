@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
-import type { ActivityTask, SubmissionRecord } from '@shared/types';
+import type { ActivityTask, QuizAttemptRecord, SubmissionRecord } from '@shared/types';
 import { ErrorState } from '../components/common/ErrorState';
 import { LoadingState } from '../components/common/LoadingState';
 import { DashboardShell } from '../components/layout/DashboardShell';
 import { useAuth } from '../auth/AuthContext';
 import { fetchAllSubmissions, fetchTasks, gradeSubmission } from '../api/tasks';
+import { fetchQuizResults } from '../api/quizzes';
 
 interface DraftState {
   [submissionId: string]: {
@@ -17,6 +18,7 @@ export function TeacherGradingPage() {
   const { session } = useAuth();
   const [tasks, setTasks] = useState<ActivityTask[]>([]);
   const [submissions, setSubmissions] = useState<SubmissionRecord[]>([]);
+  const [quizAttempts, setQuizAttempts] = useState<QuizAttemptRecord[]>([]);
   const [drafts, setDrafts] = useState<DraftState>({});
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -40,15 +42,17 @@ export function TeacherGradingPage() {
 
     async function load() {
       try {
-        const [taskList, submissionList] = await Promise.all([
+        const [taskList, submissionList, quizResultList] = await Promise.all([
           fetchTasks(safeToken),
           fetchAllSubmissions(safeToken),
+          fetchQuizResults(safeToken),
         ]);
 
         if (!active) return;
 
         setTasks(taskList);
         setSubmissions(submissionList);
+        setQuizAttempts(quizResultList);
         setDrafts(
           Object.fromEntries(
             submissionList.map((submission) => [
@@ -254,6 +258,45 @@ export function TeacherGradingPage() {
           </div>
         </div>
       )}
+
+      <section className="mt-10" aria-labelledby="quiz-results-heading">
+        <h2 id="quiz-results-heading" className="font-display text-2xl font-semibold text-parchment">
+          Quiz results
+        </h2>
+        {quizAttempts.length === 0 ? (
+          <p className="mt-4 rounded-xl border border-night-border bg-night-panel p-6 text-muted">
+            No quiz attempts have been submitted yet.
+          </p>
+        ) : (
+          <div className="mt-4 overflow-hidden rounded-xl border border-night-border bg-night-panel">
+            <div className="overflow-x-auto">
+              <table className="min-w-full text-left text-sm">
+                <thead className="bg-night/60 text-muted">
+                  <tr>
+                    <th className="px-4 py-3 font-medium">Student</th>
+                    <th className="px-4 py-3 font-medium">Quiz</th>
+                    <th className="px-4 py-3 font-medium">Score</th>
+                    <th className="px-4 py-3 font-medium">Completed</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {quizAttempts.map((attempt) => (
+                    <tr key={attempt.id} className="border-t border-night-border align-top">
+                      <td className="px-4 py-4 font-medium text-parchment">{attempt.studentName}</td>
+                      <td className="px-4 py-4 text-parchment">{attempt.quizTitle}</td>
+                      <td className="px-4 py-4 text-parchment">
+                        {attempt.scoreObtained}/{attempt.totalPossiblePoints}
+                        <span className="ml-2 text-xs text-muted">{attempt.percentageScore}%</span>
+                      </td>
+                      <td className="px-4 py-4 text-muted">{new Date(attempt.completedAt).toLocaleString()}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+      </section>
     </DashboardShell>
   );
 }

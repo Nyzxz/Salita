@@ -1,3 +1,8 @@
 {
-  "rewrites": [{ "source": "/((?!api/).*)", "destination": "/index.html" }]
+  "rewrites": [
+    { "source": "/api/content/:resource", "destination": "/api/tasks?content=:resource" },
+    { "source": "/api/quizzes", "destination": "/api/quiz?resource=quizzes" },
+    { "source": "/api/quizzes/:path*", "destination": "/api/quiz?resource=quizzes&path=:path*" },
+    { "source": "/((?!api/).*)", "destination": "/index.html" }
+  ]
 }
