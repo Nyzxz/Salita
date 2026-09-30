@@ -6,7 +6,7 @@ import type {
 } from '../../../shared/src/types.js';
 import mongoose from 'mongoose';
 import { connectDB } from '../config/db.js';
-import { TASKS } from '../data/tasks.data.js';
+import { findActivityTask } from '../content/content.service.js';
 import { Submission, type SubmissionDocument } from '../models/Submission.js';
 
 export type ServiceResult<T> = { ok: true; data: T } | { ok: false; status: number; error: string };
@@ -39,7 +39,7 @@ export async function submitWork(
   user: User,
   request: CreateSubmissionRequest,
 ): Promise<ServiceResult<SubmissionRecord>> {
-  const task = TASKS.find((t) => t.id === request.taskId);
+  const task = await findActivityTask(request.taskId);
   if (!task) {
     return { ok: false, status: 404, error: `No activity or task found with id "${request.taskId}".` };
   }
@@ -105,7 +105,7 @@ export async function gradeSubmission(
     return { ok: false, status: 404, error: 'No submission found with that id.' };
   }
 
-  const task = TASKS.find((item) => item.id === submission.taskId);
+  const task = await findActivityTask(submission.taskId);
   if (!task) {
     return { ok: false, status: 404, error: 'No task matches this submission.' };
   }

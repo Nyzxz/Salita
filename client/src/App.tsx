@@ -6,6 +6,7 @@ import { StudentDashboard } from './pages/StudentDashboard';
 import { TeacherDashboard } from './pages/TeacherDashboard';
 import { TeacherGradingPage } from './pages/TeacherGradingPage';
 import { UserManagementPage } from './pages/admin/UserManagementPage';
+import { ContentStudioPage } from './pages/admin/ContentStudioPage';
 
 export default function App() {
   return (
@@ -35,6 +36,14 @@ export default function App() {
             element={
               <ProtectedRoute role="TEACHER">
                 <UserManagementPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/dashboard/admin/studio"
+            element={
+              <ProtectedRoute role="TEACHER">
+                <ContentStudioPage />
               </ProtectedRoute>
             }
           />

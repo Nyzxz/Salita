@@ -7,6 +7,8 @@ import { submissionsRouter } from './routes/submissions.routes.js';
 import { tasksRouter } from './routes/tasks.routes.js';
 import { milestonesRouter } from './routes/milestones.routes.js';
 import { quizRouter } from './routes/quiz.routes.js';
+import { quizzesRouter } from './routes/quizzes.routes.js';
+import { contentRouter } from './routes/content.routes.js';
 import { wordsRouter } from './routes/words.routes.js';
 
 export function createApp(): Express {
@@ -34,6 +36,8 @@ export function createApp(): Express {
   app.use('/api/words', wordsRouter);
   app.use('/api/milestones', milestonesRouter);
   app.use('/api/quiz', quizRouter);
+  app.use('/api/quizzes', quizzesRouter);
+  app.use('/api/content', contentRouter);
   app.use('/api/admin', adminRouter);
   app.use('/api/tasks', tasksRouter);
   app.use('/api/submissions', submissionsRouter);

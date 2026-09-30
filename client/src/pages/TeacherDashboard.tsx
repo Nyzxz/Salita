@@ -29,6 +29,7 @@ export function TeacherDashboard() {
           {
             title: 'Content studio',
             description: 'Write lectures, build quizzes, and set activities and performance tasks.',
+            href: '/dashboard/admin/studio',
             icon: BookIcon,
           },
           {

@@ -85,6 +85,75 @@ export interface QuizQuestion {
   explanation: string;
 }
 
+export interface QuizContentQuestion {
+  questionText: string;
+  options: string[];
+  points: number;
+}
+
+export interface QuizContent {
+  id: string;
+  title: string;
+  description: string;
+  timeLimitMinutes?: number;
+  questions: QuizContentQuestion[];
+  createdBy: string;
+  createdAt: string;
+}
+
+export interface CreateQuizRequest {
+  title: string;
+  description: string;
+  timeLimitMinutes?: number;
+  questions: Array<QuizContentQuestion & { correctAnswerIndex: number }>;
+}
+
+export interface SubmitQuizAttemptRequest {
+  userAnswers: number[];
+}
+
+export interface QuizAttemptRecord {
+  id: string;
+  quizId: string;
+  quizTitle: string;
+  studentId: string;
+  studentName: string;
+  userAnswers: number[];
+  scoreObtained: number;
+  totalPossiblePoints: number;
+  percentageScore: number;
+  feedback: string;
+  completedAt: string;
+}
+
+export interface LectureRecord {
+  id: string;
+  word: string;
+  translation: string;
+  phonetic: string;
+  category: Category;
+  historicalContext: string;
+  etymologyOrigin?: string;
+  createdAt: string;
+}
+
+export interface CreateLectureRequest {
+  word: string;
+  translation: string;
+  phonetic: string;
+  category: Category;
+  historicalContext: string;
+  etymologyOrigin?: string;
+}
+
+export interface CreateActivityTaskRequest {
+  type: TaskType;
+  title: string;
+  description: string;
+  totalPoints: number;
+  dueDate: string;
+}
+
 /** Uniform envelope returned by every API endpoint. */
 export interface ApiResponse<T> {
   success: boolean;

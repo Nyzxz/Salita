@@ -7,6 +7,8 @@ import { TaskListSection } from '../components/student/TaskListSection';
 import { QuizModule } from '../components/quiz/QuizModule';
 import { VocabExplorer } from '../components/vocab/VocabExplorer';
 import { useTasksAndSubmissions } from '../hooks/useTasksAndSubmissions';
+import { AssignedQuizzes } from '../components/quiz/AssignedQuizzes';
+import { AuthoredLectures } from '../components/student/AuthoredLectures';
 
 export function StudentDashboard() {
   const { session, logout } = useAuth();
@@ -30,8 +32,18 @@ export function StudentDashboard() {
 
       <main className="mx-auto w-full max-w-[1280px] flex-1 px-4 py-10 sm:px-6 xl:px-8">
         <div key={activeTab} className="animate-fade-in-up">
-          {activeTab === 'lectures' && <VocabExplorer />}
-          {activeTab === 'quizzes' && <QuizModule />}
+          {activeTab === 'lectures' && (
+            <div className="flex flex-col gap-10">
+              <AuthoredLectures />
+              <VocabExplorer />
+            </div>
+          )}
+          {activeTab === 'quizzes' && (
+            <div className="flex flex-col gap-10">
+              <AssignedQuizzes />
+              <QuizModule />
+            </div>
+          )}
           {activeTab === 'activities' && (
             <TaskListSection
               type="ACTIVITY"
