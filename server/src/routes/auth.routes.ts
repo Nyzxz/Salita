@@ -3,10 +3,23 @@ import type { ApiResponse, AuthSession, User } from '../../../shared/src/types.j
 import { login, parseLoginRequest } from '../auth/auth.service.js';
 import { ApiError } from '../middleware/errorHandler.js';
 import { requireAuth } from '../middleware/requireAuth.js';
+import rateLimit from 'express-rate-limit';
 
 export const authRouter = Router();
 
-authRouter.post('/login', async (req, res, next) => {
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 10,
+  standardHeaders: 'draft-8',
+  legacyHeaders: false,
+  message: {
+    success: false,
+    data: null,
+    error: 'Too many sign-in attempts. Please wait 15 minutes and try again.',
+  },
+});
+
+authRouter.post('/login', loginLimiter, async (req, res, next) => {
   try {
     const request = parseLoginRequest(req.body);
     if (!request) {

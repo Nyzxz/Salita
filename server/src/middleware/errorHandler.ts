@@ -30,7 +30,7 @@ export function errorHandler(
   _next: NextFunction,
 ): void {
   const status = err instanceof ApiError ? err.status : 500;
-  const message = err instanceof Error ? err.message : 'Unexpected server error.';
+  const message = status === 500 ? 'Unexpected server error.' : err instanceof Error ? err.message : 'Request failed.';
 
   if (status === 500) {
     console.error('[unhandled error]', err);

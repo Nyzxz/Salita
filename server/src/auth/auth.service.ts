@@ -29,7 +29,7 @@ export function parseLoginRequest(body: unknown): LoginRequest | null {
     return null;
   }
   const trimmed = username.trim();
-  if (trimmed.length === 0 || password.length === 0) return null;
+  if (trimmed.length === 0 || trimmed.length > 100 || password.length === 0 || password.length > 256) return null;
   return { username: trimmed, password, role };
 }
 
@@ -53,6 +53,8 @@ function buildSession(record: UserDocument): AuthSession {
 }
 
 async function migrateLegacyUser(request: LoginRequest): Promise<UserDocument | null> {
+  if (process.env.NODE_ENV === 'production') return null;
+
   if (request.role === 'TEACHER') {
     const legacy = findTeacherByUsername(request.username);
     if (!legacy || !passwordsMatch(request.password, legacy.password)) return null;

@@ -1,5 +1,7 @@
 import cors from 'cors';
+import rateLimit from 'express-rate-limit';
 import express, { type Express } from 'express';
+import helmet from 'helmet';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler.js';
 import { authRouter } from './routes/auth.routes.js';
 import { adminRouter } from './routes/admin.routes.js';
@@ -13,9 +15,37 @@ import { wordsRouter } from './routes/words.routes.js';
 
 export function createApp(): Express {
   const app = express();
+  const configuredOrigins = (process.env.CORS_ORIGINS ?? '')
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+  const allowedOrigins = new Set([
+    ...configuredOrigins,
+    ...(process.env.NODE_ENV === 'production' ? [] : ['http://localhost:5173', 'http://127.0.0.1:5173']),
+  ]);
 
-  app.use(cors());
-  app.use(express.json());
+  app.use(helmet());
+  app.use(
+    cors({
+      origin(origin, callback) {
+        callback(null, !origin || allowedOrigins.has(origin));
+      },
+      methods: ['GET', 'POST', 'PUT', 'OPTIONS'],
+      allowedHeaders: ['Authorization', 'Content-Type', 'Accept'],
+      maxAge: 600,
+    }),
+  );
+  app.use(express.json({ limit: '32kb' }));
+  app.use(
+    '/api',
+    rateLimit({
+      windowMs: 15 * 60 * 1000,
+      limit: 300,
+      standardHeaders: 'draft-8',
+      legacyHeaders: false,
+      message: { success: false, data: null, error: 'Too many requests. Please try again later.' },
+    }),
+  );
 
   app.get('/', (_req, res) => {
     res.json({

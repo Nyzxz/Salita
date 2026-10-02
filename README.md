@@ -106,8 +106,8 @@ npm run format          # Prettier, writes in place
 
 ## Admin: user management (`/dashboard/admin/users`)
 
-Teachers can create and manage student accounts from the dashboard's "User
-management" tile:
+Teachers can create and manage MongoDB-backed student accounts from the
+dashboard's "User management" tile:
 
 - **Create a student** — full name, username, email, initial password (6+
   characters), and section. Usernames must be unique; the form shows a clear
@@ -115,9 +115,8 @@ management" tile:
 - **Student directory** — every account, with a quick "Reset password" and
   "Deactivate"/"Reactivate" action per row. Deactivating a student blocks
   sign-in immediately, even if they're already holding a valid session token.
-- Created accounts can log in right away at `/login` as a student — the
-  directory *is* the login list (`server/src/data/students.store.ts`), not a
-  separate record.
+- Created accounts can log in right away at `/login` as a student. Passwords
+  are hashed before being stored in MongoDB.
 
 API: `GET`/`POST /api/admin/students`, `PUT /api/admin/students/:id`
 (partial update — send only the fields changing). All three require a
@@ -138,32 +137,32 @@ A five-tab LMS view, all sharing one top nav:
 | My Grades | A table of everything submitted, with score and feedback once graded |
 
 Submitting a task calls `POST /api/submissions`; resubmitting the same task
-overwrites the previous submission and resets it to "Pending". There is no
-teacher-facing grading UI yet — `grade`/`feedback` exist on `SubmissionRecord`
-and will show up in "My Grades" as soon as something writes them, but nothing
-does yet. `server/src/data/tasks.data.ts` is a short, read-only mock list;
-there's no task-creation UI either yet.
+overwrites the previous submission and resets it to "Pending". Teachers can
+grade assignments and review saved quiz attempts in the Grading Center. New
+lectures, quizzes, tasks, submissions, grades, and quiz attempts persist in
+MongoDB across sessions and devices.
 
 ## Sign-in
 
-The sign-in page is the landing page. Students see the vocabulary explorer,
-language timeline, and practice module inside their protected student account.
-Teachers see their role-specific dashboard.
+The sign-in page is the landing page. Students see learning materials, quizzes,
+tasks, and grades inside their protected account. Teachers have user management,
+Content Studio, and a Grading Center.
 
-| Role | Username | Password |
-| --- | --- | --- |
-| Teacher | `teacher` | `` |
-| Student | `maria` | `student123` |
-| Student | `jun` | `student123` |
+The session token expires after eight hours. Before deploying to Vercel, set
+private `AUTH_SECRET` and `MONGO_URI` environment variables in the project
+settings and redeploy. Never store production passwords in source control.
+Production login does not migrate legacy demo users. Existing accounts created
+from demo credentials should have their passwords changed in MongoDB. Local-only
+legacy migration requires `DEV_TEACHER_PASSWORD` and `DEV_STUDENT_PASSWORD` in
+the ignored `server/.env` file. When Express is deployed separately from the
+client, set `CORS_ORIGINS` to trusted frontend origins.
 
-The session token expires after eight hours. Before deploying to Vercel, set a
-private `AUTH_SECRET` environment variable in the project settings and redeploy.
-Production auth refuses to use the development fallback secret. These accounts
-are in-memory demo data; real accounts require a database and hashed passwords.
-On Vercel specifically, a student created through the admin panel, or a
-submission a student turns in, does not reliably persist across requests —
-serverless functions don't share memory between invocations. Everything here
-works fully for local `npm run dev` (one long-running process).
+The student dashboard and teacher Grading Center refresh data every ten seconds
+while the tab is visible. Express applies request throttling, login throttling,
+Helmet headers, and a JSON body-size limit. Vercel adds browser security headers,
+but its serverless API functions do not run Express middleware. Configure a
+Vercel Firewall or a shared rate-limit service for production login throttling;
+the Express in-memory limiter does not protect serverless functions.
 
 ## API reference
 
@@ -226,5 +225,6 @@ and editor cruft, so nothing generated gets committed.
   values), and quiz questions in `quiz.data.ts` can reference any
   `WordItem` by its `id`.
 - **Persistence:** the API is intentionally stateless mock data. Swapping
-  `server/src/data/*.ts` for a real database means changing the *data
-  layer* only — routes, middleware, and every shared type stay the same.
+- **Persistence:** MongoDB stores users, authored learning content, submissions,
+  grades, and quiz attempts. Keep `MONGO_URI` and `AUTH_SECRET` in deployment
+  environment settings, not in source control.

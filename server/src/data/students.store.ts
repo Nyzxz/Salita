@@ -31,28 +31,32 @@ export interface UpdateStudentInput {
  * (one long-running Express process). Moving to real storage (Postgres,
  * Redis, etc.) only requires changing the functions in this file.
  */
-export const STUDENTS: StudentRecord[] = [
-  {
-    id: 'user-student-1',
-    fullName: 'Maria Santos',
-    username: 'maria',
-    email: 'maria@example.com',
-    section: 'Grade 10 - Rizal',
-    createdAt: '2026-01-10T00:00:00.000Z',
-    status: 'ACTIVE',
-    password: 'student123',
-  },
-  {
-    id: 'user-student-2',
-    fullName: 'Jun Dela Cruz',
-    username: 'jun',
-    email: 'jun@example.com',
-    section: 'Grade 10 - Bonifacio',
-    createdAt: '2026-01-12T00:00:00.000Z',
-    status: 'ACTIVE',
-    password: 'student123',
-  },
-];
+const devStudentPassword = process.env.DEV_STUDENT_PASSWORD;
+
+export const STUDENTS: StudentRecord[] = devStudentPassword
+  ? [
+      {
+        id: 'user-student-1',
+        fullName: 'Maria Santos',
+        username: 'maria',
+        email: 'maria@example.com',
+        section: 'Grade 10 - Rizal',
+        createdAt: '2026-01-10T00:00:00.000Z',
+        status: 'ACTIVE',
+        password: devStudentPassword,
+      },
+      {
+        id: 'user-student-2',
+        fullName: 'Jun Dela Cruz',
+        username: 'jun',
+        email: 'jun@example.com',
+        section: 'Grade 10 - Bonifacio',
+        createdAt: '2026-01-12T00:00:00.000Z',
+        status: 'ACTIVE',
+        password: devStudentPassword,
+      },
+    ]
+  : [];
 
 let nextId = STUDENTS.length + 1;
 

@@ -9,15 +9,19 @@ export interface TeacherRecord extends User {
  * mock data with no database. A real system would store salted hashes
  * (bcrypt/argon2) and never ship credentials in source control.
  */
-export const TEACHERS: TeacherRecord[] = [
-  {
-    id: 'user-teacher-1',
-    username: 'teacher',
-    name: 'Ms. Reyes',
-    role: 'TEACHER',
-    password: 'Project123Go',
-  },
-];
+const devTeacherPassword = process.env.DEV_TEACHER_PASSWORD;
+
+export const TEACHERS: TeacherRecord[] = devTeacherPassword
+  ? [
+      {
+        id: 'user-teacher-1',
+        username: 'teacher',
+        name: 'Ms. Reyes',
+        role: 'TEACHER',
+        password: devTeacherPassword,
+      },
+    ]
+  : [];
 
 export function findTeacherByUsername(username: string): TeacherRecord | undefined {
   return TEACHERS.find((t) => t.username.toLowerCase() === username.toLowerCase());

@@ -40,6 +40,8 @@ export function TeacherGradingPage() {
     const safeToken = token;
     let active = true;
 
+    let hasLoaded = false;
+
     async function load() {
       try {
         const [taskList, submissionList, quizResultList] = await Promise.all([
@@ -53,21 +55,23 @@ export function TeacherGradingPage() {
         setTasks(taskList);
         setSubmissions(submissionList);
         setQuizAttempts(quizResultList);
-        setDrafts(
-          Object.fromEntries(
-            submissionList.map((submission) => [
-              submission.id,
-              {
-                grade: submission.grade?.toString() ?? '',
-                feedback: submission.feedback ?? '',
-              },
-            ]),
-          ),
-        );
+        setDrafts((current) => {
+          const next = { ...current };
+          for (const submission of submissionList) {
+            next[submission.id] ??= {
+              grade: submission.grade?.toString() ?? '',
+              feedback: submission.feedback ?? '',
+            };
+          }
+          return next;
+        });
         setError(null);
+        hasLoaded = true;
       } catch (err) {
         if (!active) return;
-        setError(err instanceof Error ? err.message : 'Could not load submissions.');
+        if (!hasLoaded) {
+          setError(err instanceof Error ? err.message : 'Could not load submissions.');
+        }
       } finally {
         if (active) {
           setIsLoading(false);
@@ -76,9 +80,16 @@ export function TeacherGradingPage() {
     }
 
     void load();
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === 'visible') void load();
+    };
+    const interval = window.setInterval(refreshWhenVisible, 10_000);
+    document.addEventListener('visibilitychange', refreshWhenVisible);
 
     return () => {
       active = false;
+      window.clearInterval(interval);
+      document.removeEventListener('visibilitychange', refreshWhenVisible);
     };
   }, [session?.token]);
 

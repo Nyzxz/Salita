@@ -3,30 +3,43 @@ import type { ActivityTask, SubmissionRecord } from '@shared/types';
 import { fetchMySubmissions, fetchTasks, submitTaskWork } from '../api/tasks';
 import { ApiRequestError } from '../api/client';
 
-/** Loads tasks + the student's own submissions together, and keeps them in sync after a submit. */
+/** Loads the student's work and refreshes it periodically while the page is open. */
 export function useTasksAndSubmissions(token: string) {
   const [tasks, setTasks] = useState<ActivityTask[] | null>(null);
   const [submissions, setSubmissions] = useState<SubmissionRecord[] | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const load = useCallback(() => {
+  const load = useCallback(async () => {
     if (!token) return;
-    setIsLoading(true);
-    setError(null);
-    Promise.all([fetchTasks(token), fetchMySubmissions(token)])
-      .then(([taskList, submissionList]) => {
-        setTasks(taskList);
-        setSubmissions(submissionList);
-      })
-      .catch((err: unknown) => {
-        setError(err instanceof ApiRequestError ? err.message : 'Could not load your work.');
-      })
-      .finally(() => setIsLoading(false));
+    try {
+      const [taskList, submissionList] = await Promise.all([fetchTasks(token), fetchMySubmissions(token)]);
+      setTasks(taskList);
+      setSubmissions(submissionList);
+      setError(null);
+    } catch (err: unknown) {
+      setError(err instanceof ApiRequestError ? err.message : 'Could not load your work.');
+    } finally {
+      setIsLoading(false);
+    }
   }, [token]);
 
   useEffect(() => {
-    load();
+    if (!token) {
+      setIsLoading(false);
+      return;
+    }
+
+    void load();
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === 'visible') void load();
+    };
+    const interval = window.setInterval(refreshWhenVisible, 10_000);
+    document.addEventListener('visibilitychange', refreshWhenVisible);
+    return () => {
+      window.clearInterval(interval);
+      document.removeEventListener('visibilitychange', refreshWhenVisible);
+    };
   }, [load]);
 
   const submit = useCallback(

@@ -37,6 +37,13 @@ export function verifyToken(token: string): TokenPayload | null {
   if (parts.length !== 3) return null;
 
   const [header, body, signature] = parts;
+  try {
+    const decodedHeader = JSON.parse(decode(header)) as { alg?: unknown; typ?: unknown };
+    if (decodedHeader.alg !== 'HS256' || decodedHeader.typ !== 'JWT') return null;
+  } catch {
+    return null;
+  }
+
   const expected = Buffer.from(sign(`${header}.${body}`));
   const actual = Buffer.from(signature);
   if (expected.length !== actual.length || !timingSafeEqual(expected, actual)) return null;

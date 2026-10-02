@@ -29,7 +29,14 @@ export function parseCreateStudentRequest(body: unknown): CreateStudentRequest |
     password,
     section: section.trim(),
   };
-  if (Object.values(trimmed).some((v) => v.length === 0)) return null;
+  if (
+    Object.values(trimmed).some((v) => v.length === 0) ||
+    trimmed.fullName.length > 120 ||
+    !/^[a-zA-Z0-9._-]{3,40}$/.test(trimmed.username) ||
+    trimmed.email.length > 254 ||
+    trimmed.password.length > 128 ||
+    trimmed.section.length > 100
+  ) return null;
   return trimmed;
 }
 
@@ -40,15 +47,15 @@ export function parseUpdateStudentRequest(body: unknown): UpdateStudentRequest |
   const result: UpdateStudentRequest = {};
 
   if (fullName !== undefined) {
-    if (typeof fullName !== 'string' || fullName.trim().length === 0) return null;
+    if (typeof fullName !== 'string' || fullName.trim().length === 0 || fullName.trim().length > 120) return null;
     result.fullName = fullName.trim();
   }
   if (email !== undefined) {
-    if (typeof email !== 'string' || email.trim().length === 0) return null;
+    if (typeof email !== 'string' || email.trim().length === 0 || email.trim().length > 254) return null;
     result.email = email.trim();
   }
   if (section !== undefined) {
-    if (typeof section !== 'string' || section.trim().length === 0) return null;
+    if (typeof section !== 'string' || section.trim().length === 0 || section.trim().length > 100) return null;
     result.section = section.trim();
   }
   if (status !== undefined) {
@@ -56,7 +63,7 @@ export function parseUpdateStudentRequest(body: unknown): UpdateStudentRequest |
     result.status = status;
   }
   if (password !== undefined) {
-    if (typeof password !== 'string' || password.length === 0) return null;
+    if (typeof password !== 'string' || password.length === 0 || password.length > 128) return null;
     result.password = password;
   }
   if (Object.keys(result).length === 0) return null;
