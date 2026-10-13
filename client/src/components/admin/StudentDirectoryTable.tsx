@@ -1,5 +1,8 @@
 import { useState } from 'react';
 import type { StudentAccount } from '@shared/types';
+import { Avatar } from '../common/Avatar';
+import { UsersIcon } from '../common/icons';
+import { EmptyState } from '../ui/EmptyState';
 
 interface StudentDirectoryTableProps {
   students: StudentAccount[];
@@ -22,7 +25,7 @@ export function StudentDirectoryTable({
   const [newPassword, setNewPassword] = useState('');
 
   if (students.length === 0) {
-    return <p className="text-sm text-muted">No students yet — add one above.</p>;
+    return <EmptyState icon={<UsersIcon />} title="No students yet" description="Add your first student with the form to get started." />;
   }
 
   const startReset = (student: StudentAccount) => {
@@ -38,43 +41,40 @@ export function StudentDirectoryTable({
   };
 
   return (
-    <div className="overflow-x-auto rounded-xl border border-night-border">
-      <table className="min-w-full divide-y divide-night-border text-left text-sm">
-        <thead className="bg-night-panel text-xs uppercase tracking-wide text-muted">
+    <div className="table-wrap overflow-x-auto">
+      <table className="data-table">
+        <thead>
           <tr>
-            <th className="px-4 py-3 font-medium">Student</th>
-            <th className="px-4 py-3 font-medium">Username</th>
-            <th className="px-4 py-3 font-medium">Section</th>
-            <th className="px-4 py-3 font-medium">Created</th>
-            <th className="px-4 py-3 font-medium">Status</th>
-            <th className="px-4 py-3 font-medium">Actions</th>
+            <th>Student</th>
+            <th>Section</th>
+            <th>Created</th>
+            <th>Status</th>
+            <th>Actions</th>
           </tr>
         </thead>
-        <tbody className="divide-y divide-night-border bg-night">
+        <tbody>
           {students.map((student) => {
             const isPending = pendingActionId === student.id;
             const isResetting = resettingId === student.id;
             return (
               <tr key={student.id}>
-                <td className="px-4 py-3">
-                  <p className="text-parchment">{student.fullName}</p>
-                  <p className="text-xs text-muted">{student.email}</p>
+                <td>
+                  <div className="flex items-center gap-3">
+                    <Avatar name={student.fullName} size="sm" accent="leaf" />
+                    <div className="min-w-0">
+                      <p className="font-medium text-parchment">{student.fullName}</p>
+                      <p className="truncate text-xs text-muted">@{student.username} · {student.email}</p>
+                    </div>
+                  </div>
                 </td>
-                <td className="px-4 py-3 text-muted">{student.username}</td>
-                <td className="px-4 py-3 text-muted">{student.section}</td>
-                <td className="px-4 py-3 text-muted">{formatDate(student.createdAt)}</td>
-                <td className="px-4 py-3">
-                  <span
-                    className={`rounded-full border px-2.5 py-0.5 text-xs ${
-                      student.status === 'ACTIVE'
-                        ? 'border-leaf/40 text-leaf'
-                        : 'border-clay/40 text-clay'
-                    }`}
-                  >
+                <td className="text-muted">{student.section}</td>
+                <td className="whitespace-nowrap text-muted">{formatDate(student.createdAt)}</td>
+                <td>
+                  <span className={student.status === 'ACTIVE' ? 'badge-leaf' : 'badge-clay'}>
                     {student.status === 'ACTIVE' ? 'Active' : 'Deactivated'}
                   </span>
                 </td>
-                <td className="px-4 py-3">
+                <td>
                   {isResetting ? (
                     <div className="flex items-center gap-2">
                       <input
@@ -82,46 +82,34 @@ export function StudentDirectoryTable({
                         type="text"
                         value={newPassword}
                         onChange={(e) => setNewPassword(e.target.value)}
-                        placeholder="New password"
-                        className="w-32 rounded-md border border-night-border bg-night-panel px-2 py-1 text-xs text-parchment"
+                        placeholder="New password (6+)"
+                        aria-label={`New password for ${student.fullName}`}
+                        className="field w-40 py-1.5 text-xs"
                       />
                       <button
                         type="button"
                         onClick={() => confirmReset(student)}
                         disabled={newPassword.trim().length < 6}
-                        className="text-xs text-gold hover:underline disabled:cursor-not-allowed disabled:opacity-50"
+                        className="btn-primary btn-sm"
                       >
                         Save
                       </button>
-                      <button
-                        type="button"
-                        onClick={() => setResettingId(null)}
-                        className="text-xs text-muted hover:underline"
-                      >
+                      <button type="button" onClick={() => setResettingId(null)} className="btn-ghost btn-sm">
                         Cancel
                       </button>
                     </div>
                   ) : (
-                    <div className="flex items-center gap-3 text-xs">
-                      <button
-                        type="button"
-                        onClick={() => startReset(student)}
-                        disabled={isPending}
-                        className="text-gold hover:underline disabled:cursor-not-allowed disabled:opacity-50"
-                      >
+                    <div className="flex items-center gap-2">
+                      <button type="button" onClick={() => startReset(student)} disabled={isPending} className="btn-secondary btn-sm">
                         Reset password
                       </button>
                       <button
                         type="button"
                         onClick={() => onToggleStatus(student)}
                         disabled={isPending}
-                        className="text-clay hover:underline disabled:cursor-not-allowed disabled:opacity-50"
+                        className={student.status === 'ACTIVE' ? 'btn-danger btn-sm' : 'btn-secondary btn-sm'}
                       >
-                        {isPending
-                          ? 'Saving…'
-                          : student.status === 'ACTIVE'
-                            ? 'Deactivate'
-                            : 'Reactivate'}
+                        {isPending ? 'Saving…' : student.status === 'ACTIVE' ? 'Deactivate' : 'Reactivate'}
                       </button>
                     </div>
                   )}

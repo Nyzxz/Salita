@@ -17,17 +17,17 @@ function initialsFor(name: string): string {
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 
-/** A soft-gradient initials circle, standing in for a photo avatar. */
+/** Initials in a ringed circle, standing in for a photo avatar. */
 export function Avatar({ name, size = 'md', accent = 'gold' }: AvatarProps) {
-  const gradient =
+  const tone =
     accent === 'gold'
-      ? 'from-gold to-clay text-night'
-      : 'from-leaf to-gold-soft text-night';
+      ? 'from-gold-soft to-gold text-night'
+      : 'from-leaf to-[#6fbf8e] text-night';
 
   return (
     <span
       aria-hidden="true"
-      className={`flex flex-none items-center justify-center rounded-full bg-gradient-to-br font-display font-semibold ${gradient} ${SIZE_CLASSES[size]}`}
+      className={`flex flex-none items-center justify-center rounded-full bg-gradient-to-br font-body font-bold ring-2 ring-white/10 ${tone} ${SIZE_CLASSES[size]}`}
     >
       {initialsFor(name)}
     </span>

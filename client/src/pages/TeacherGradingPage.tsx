@@ -1,8 +1,12 @@
-import { useEffect, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useState } from 'react';
 import type { ActivityTask, QuizAttemptRecord, SubmissionRecord } from '@shared/types';
 import { ErrorState } from '../components/common/ErrorState';
 import { LoadingState } from '../components/common/LoadingState';
 import { DashboardShell } from '../components/layout/DashboardShell';
+import { BackLink } from '../components/layout/BackLink';
+import { Avatar } from '../components/common/Avatar';
+import { ChartIcon, ChevronRightIcon, ClipboardCheckIcon } from '../components/common/icons';
+import { EmptyState } from '../components/ui/EmptyState';
 import { useAuth } from '../auth/AuthContext';
 import { fetchAllSubmissions, fetchTasks, gradeSubmission } from '../api/tasks';
 import { fetchQuizResults } from '../api/quizzes';
@@ -40,8 +44,6 @@ export function TeacherGradingPage() {
     const safeToken = token;
     let active = true;
 
-    let hasLoaded = false;
-
     async function load() {
       try {
         const [taskList, submissionList, quizResultList] = await Promise.all([
@@ -55,23 +57,21 @@ export function TeacherGradingPage() {
         setTasks(taskList);
         setSubmissions(submissionList);
         setQuizAttempts(quizResultList);
-        setDrafts((current) => {
-          const next = { ...current };
-          for (const submission of submissionList) {
-            next[submission.id] ??= {
-              grade: submission.grade?.toString() ?? '',
-              feedback: submission.feedback ?? '',
-            };
-          }
-          return next;
-        });
+        setDrafts(
+          Object.fromEntries(
+            submissionList.map((submission) => [
+              submission.id,
+              {
+                grade: submission.grade?.toString() ?? '',
+                feedback: submission.feedback ?? '',
+              },
+            ]),
+          ),
+        );
         setError(null);
-        hasLoaded = true;
       } catch (err) {
         if (!active) return;
-        if (!hasLoaded) {
-          setError(err instanceof Error ? err.message : 'Could not load submissions.');
-        }
+        setError(err instanceof Error ? err.message : 'Could not load submissions.');
       } finally {
         if (active) {
           setIsLoading(false);
@@ -80,16 +80,9 @@ export function TeacherGradingPage() {
     }
 
     void load();
-    const refreshWhenVisible = () => {
-      if (document.visibilityState === 'visible') void load();
-    };
-    const interval = window.setInterval(refreshWhenVisible, 10_000);
-    document.addEventListener('visibilitychange', refreshWhenVisible);
 
     return () => {
       active = false;
-      window.clearInterval(interval);
-      document.removeEventListener('visibilitychange', refreshWhenVisible);
     };
   }, [session?.token]);
 
@@ -151,29 +144,29 @@ export function TeacherGradingPage() {
 
   return (
     <DashboardShell
+      eyebrow="Teacher workspace"
       title="Grading center"
       subtitle="Review each student submission, assign a score, and leave teacher feedback."
+      actions={<BackLink />}
     >
       {isLoading ? (
         <LoadingState label="Loading submissions…" />
       ) : error ? (
         <ErrorState message={error} onRetry={() => window.location.reload()} />
       ) : submissions.length === 0 ? (
-        <div className="rounded-xl border border-night-border bg-night-panel p-6 text-muted">
-          No submissions have been turned in yet.
-        </div>
+        <EmptyState icon={<ClipboardCheckIcon />} title="No submissions yet" description="Student work will appear here as soon as it's turned in." />
       ) : (
-        <div className="overflow-hidden rounded-xl border border-night-border bg-night-panel">
+        <div className="table-wrap">
           <div className="overflow-x-auto">
-            <table className="min-w-full text-left text-sm">
-              <thead className="bg-night/60 text-muted">
+            <table className="data-table">
+              <thead>
                 <tr>
-                  <th className="px-4 py-3 font-medium">Student</th>
-                  <th className="px-4 py-3 font-medium">Task</th>
-                  <th className="px-4 py-3 font-medium">Submitted</th>
-                  <th className="px-4 py-3 font-medium">Grade</th>
-                  <th className="px-4 py-3 font-medium">Feedback</th>
-                  <th className="px-4 py-3 font-medium">Action</th>
+                  <th>Student</th>
+                  <th>Task</th>
+                  <th>Submitted</th>
+                  <th>Grade</th>
+                  <th>Feedback</th>
+                  <th>Action</th>
                 </tr>
               </thead>
               <tbody>
@@ -186,61 +179,68 @@ export function TeacherGradingPage() {
                   const isExpanded = expandedSubmissionId === submission.id;
 
                   return (
-                    <>
-                      <tr key={submission.id} className="border-t border-night-border align-top">
-                        <td className="px-4 py-4">
-                          <div className="font-medium text-parchment">{submission.studentName}</div>
-                          <div className="text-xs text-muted">{submission.status}</div>
+                    <Fragment key={submission.id}>
+                      <tr>
+                        <td>
+                          <div className="flex items-center gap-3">
+                            <Avatar name={submission.studentName} size="sm" accent="leaf" />
+                            <div>
+                              <div className="font-medium text-parchment">{submission.studentName}</div>
+                              <span className={submission.status === 'GRADED' ? 'badge-leaf mt-1' : 'badge-gold mt-1'}>
+                                {submission.status === 'GRADED' ? 'Graded' : 'Needs grading'}
+                              </span>
+                            </div>
+                          </div>
                         </td>
-                        <td className="px-4 py-4 text-parchment">
+                        <td className="text-parchment">
                           <button
                             type="button"
+                            aria-expanded={isExpanded}
                             onClick={() =>
                               setExpandedSubmissionId((current) =>
                                 current === submission.id ? null : submission.id,
                               )
                             }
-                            className="text-left font-medium underline decoration-gold/60 underline-offset-4 hover:text-gold"
+                            className="inline-flex items-center gap-1.5 text-left font-medium transition-colors hover:text-gold"
                           >
                             {task?.title ?? submission.taskId}
+                            <ChevronRightIcon className={`h-3.5 w-3.5 flex-none transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
                           </button>
-                          {task && (
-                            <div className="text-xs text-muted">
-                              {task.totalPoints} points total
-                            </div>
-                          )}
+                          {task && <div className="mt-0.5 text-xs text-muted">{task.totalPoints} points total</div>}
                         </td>
-                        <td className="px-4 py-4 text-muted">
+                        <td className="whitespace-nowrap text-muted">
                           {new Date(submission.submittedAt).toLocaleString()}
                         </td>
-                        <td className="px-4 py-4">
+                        <td className="whitespace-nowrap">
                           <input
                             type="number"
                             min={0}
                             max={task?.totalPoints ?? 100}
                             value={draft.grade}
+                            aria-label={`Grade for ${submission.studentName}`}
                             onChange={(event) => handleDraftChange(submission.id, 'grade', event.target.value)}
-                            className="w-24 rounded-md border border-night-border bg-night px-3 py-2 text-parchment"
+                            className="field w-20 py-2"
                           />
-                          {task && <span className="ml-2 text-xs text-muted">/{task.totalPoints}</span>}
+                          {task && <span className="ml-2 text-xs text-muted">/ {task.totalPoints}</span>}
                         </td>
-                        <td className="px-4 py-4">
+                        <td>
                           <textarea
                             value={draft.feedback}
                             onChange={(event) =>
                               handleDraftChange(submission.id, 'feedback', event.target.value)
                             }
-                            rows={3}
+                            rows={2}
+                            aria-label={`Feedback for ${submission.studentName}`}
                             placeholder="Leave feedback for the student"
-                            className="w-full min-w-[220px] rounded-md border border-night-border bg-night px-3 py-2 text-parchment"
+                            className="field min-w-[220px]"
                           />
                         </td>
-                        <td className="px-4 py-4">
+                        <td>
                           <button
                             type="button"
                             onClick={() => void handleSave(submission)}
                             disabled={savingId === submission.id}
-                            className="rounded-md bg-gold px-3 py-2 text-sm font-semibold text-night transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+                            className="btn-primary btn-sm"
                           >
                             {savingId === submission.id ? 'Saving…' : 'Save'}
                           </button>
@@ -248,20 +248,16 @@ export function TeacherGradingPage() {
                       </tr>
 
                       {isExpanded && (
-                        <tr key={`${submission.id}-detail`} className="border-t border-night-border bg-night/40">
-                          <td colSpan={6} className="px-4 py-4">
-                            <div className="rounded-lg border border-night-border bg-night-panel p-4">
-                              <div className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-muted">
-                                Student answer
-                              </div>
-                              <div className="whitespace-pre-wrap text-sm leading-6 text-parchment">
-                                {submission.submittedContent || 'No submission text was provided.'}
-                              </div>
+                        <tr className="bg-night-deep/40">
+                          <td colSpan={6} className="!py-5">
+                            <p className="eyebrow">Student answer</p>
+                            <div className="mt-2 whitespace-pre-wrap rounded-xl border border-night-border bg-night-panel p-4 text-sm leading-6 text-parchment">
+                              {submission.submittedContent || 'No submission text was provided.'}
                             </div>
                           </td>
                         </tr>
                       )}
-                    </>
+                    </Fragment>
                   );
                 })}
               </tbody>
@@ -270,43 +266,44 @@ export function TeacherGradingPage() {
         </div>
       )}
 
-      <section className="mt-10" aria-labelledby="quiz-results-heading">
-        <h2 id="quiz-results-heading" className="font-display text-2xl font-semibold text-parchment">
+      <section className="mt-12" aria-labelledby="quiz-results-heading">
+        <h2 id="quiz-results-heading" className="text-xl font-semibold text-parchment">
           Quiz results
         </h2>
-        {quizAttempts.length === 0 ? (
-          <p className="mt-4 rounded-xl border border-night-border bg-night-panel p-6 text-muted">
-            No quiz attempts have been submitted yet.
-          </p>
-        ) : (
-          <div className="mt-4 overflow-hidden rounded-xl border border-night-border bg-night-panel">
-            <div className="overflow-x-auto">
-              <table className="min-w-full text-left text-sm">
-                <thead className="bg-night/60 text-muted">
+        <p className="mt-1 text-sm text-muted">Scores are calculated on the server when students submit.</p>
+        <div className="mt-5">
+          {quizAttempts.length === 0 ? (
+            <EmptyState icon={<ChartIcon />} title="No quiz attempts yet" description="Results appear here as students complete quizzes." />
+          ) : (
+            <div className="table-wrap overflow-x-auto">
+              <table className="data-table">
+                <thead>
                   <tr>
-                    <th className="px-4 py-3 font-medium">Student</th>
-                    <th className="px-4 py-3 font-medium">Quiz</th>
-                    <th className="px-4 py-3 font-medium">Score</th>
-                    <th className="px-4 py-3 font-medium">Completed</th>
+                    <th>Student</th>
+                    <th>Quiz</th>
+                    <th>Score</th>
+                    <th>Completed</th>
                   </tr>
                 </thead>
                 <tbody>
                   {quizAttempts.map((attempt) => (
-                    <tr key={attempt.id} className="border-t border-night-border align-top">
-                      <td className="px-4 py-4 font-medium text-parchment">{attempt.studentName}</td>
-                      <td className="px-4 py-4 text-parchment">{attempt.quizTitle}</td>
-                      <td className="px-4 py-4 text-parchment">
-                        {attempt.scoreObtained}/{attempt.totalPossiblePoints}
-                        <span className="ml-2 text-xs text-muted">{attempt.percentageScore}%</span>
+                    <tr key={attempt.id}>
+                      <td className="font-medium text-parchment">{attempt.studentName}</td>
+                      <td className="text-parchment">{attempt.quizTitle}</td>
+                      <td>
+                        <span className={attempt.percentageScore >= 75 ? 'badge-leaf' : attempt.percentageScore >= 50 ? 'badge-gold' : 'badge-clay'}>
+                          {attempt.percentageScore}%
+                        </span>
+                        <span className="ml-2 text-xs text-muted">{attempt.scoreObtained}/{attempt.totalPossiblePoints}</span>
                       </td>
-                      <td className="px-4 py-4 text-muted">{new Date(attempt.completedAt).toLocaleString()}</td>
+                      <td className="text-muted">{new Date(attempt.completedAt).toLocaleString()}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
-          </div>
-        )}
+          )}
+        </div>
       </section>
     </DashboardShell>
   );

@@ -1,28 +1,9 @@
 import { useRef, useState } from 'react';
+import { SpeakerIcon } from '../common/icons';
 
 interface AudioButtonProps {
   audioUrl?: string;
   label: string;
-}
-
-/** Speaker icon; swaps for a small "waiting" glyph while audio plays. */
-function SpeakerIcon({ playing }: { playing: boolean }) {
-  return (
-    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" aria-hidden="true">
-      <path
-        d="M4 9v6h4l5 4V5L8 9H4Z"
-        fill="currentColor"
-        opacity={playing ? 1 : 0.9}
-      />
-      <path
-        d="M16.5 8.5a5 5 0 0 1 0 7"
-        stroke="currentColor"
-        strokeWidth={1.6}
-        strokeLinecap="round"
-        opacity={playing ? 1 : 0.5}
-      />
-    </svg>
-  );
 }
 
 export function AudioButton({ audioUrl, label }: AudioButtonProps) {
@@ -34,9 +15,9 @@ export function AudioButton({ audioUrl, label }: AudioButtonProps) {
       <span
         title="Pronunciation audio coming soon"
         aria-disabled="true"
-        className="inline-flex cursor-not-allowed items-center gap-1.5 rounded-full border border-night-border px-3 py-1.5 text-xs text-muted"
+        className="inline-flex flex-none cursor-not-allowed items-center gap-1.5 rounded-full border border-night-border bg-white/[0.02] px-3 py-1.5 text-xs text-muted"
       >
-        <SpeakerIcon playing={false} />
+        <SpeakerIcon className="h-3.5 w-3.5" />
         Audio soon
       </span>
     );
@@ -56,9 +37,11 @@ export function AudioButton({ audioUrl, label }: AudioButtonProps) {
       type="button"
       onClick={handleClick}
       aria-label={`Play pronunciation of ${label}`}
-      className="inline-flex items-center gap-1.5 rounded-full border border-gold/50 px-3 py-1.5 text-xs text-gold transition-colors hover:bg-gold/10"
+      className={`inline-flex flex-none items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${
+        isPlaying ? 'border-gold bg-gold text-night' : 'border-gold/40 text-gold hover:bg-gold/10'
+      }`}
     >
-      <SpeakerIcon playing={isPlaying} />
+      <SpeakerIcon className="h-3.5 w-3.5" />
       {isPlaying ? 'Playing…' : 'Play'}
     </button>
   );

@@ -9,6 +9,10 @@ import {
 import { ApiRequestError } from '../../api/client';
 import { ErrorState } from '../common/ErrorState';
 import { LoadingState } from '../common/LoadingState';
+import { EmptyState } from '../ui/EmptyState';
+import { Notice } from '../ui/Notice';
+import { PageIntro } from '../ui/PageIntro';
+import { ArrowLeftIcon, ArrowRightIcon, CheckIcon, ClockIcon, InboxIcon, QuizIcon } from '../common/icons';
 
 export function AssignedQuizzes() {
   const { session } = useAuth();
@@ -67,41 +71,43 @@ export function AssignedQuizzes() {
 
   return (
     <section className="flex flex-col gap-6" aria-labelledby="assigned-quizzes-heading">
-      <div>
-        <h2 id="assigned-quizzes-heading" className="font-display text-2xl font-semibold text-parchment">
-          Teacher quizzes
-        </h2>
-        <p className="mt-1 text-sm text-muted">Complete a quiz and your score will be saved to your account.</p>
-      </div>
+      <PageIntro
+        id="assigned-quizzes-heading"
+        eyebrow="From your teacher"
+        title="Teacher quizzes"
+        description="Complete a quiz and your score will be saved to your account."
+      />
 
-      {error && <p role="alert" className="text-sm text-clay">{error}</p>}
+      {error && <Notice tone="error">{error}</Notice>}
 
       {selectedQuiz && !latestAttempt ? (
-        <div className="flex flex-col gap-6 rounded-xl border border-night-border bg-night-panel p-6 sm:p-8">
+        <div className="surface flex animate-fade-in flex-col gap-7 p-6 sm:p-8">
           <div>
-            <button type="button" onClick={() => setSelectedQuiz(null)} className="mb-4 text-sm text-gold hover:underline">
+            <button type="button" onClick={() => setSelectedQuiz(null)} className="btn-ghost btn-sm -ml-3 mb-3">
+              <ArrowLeftIcon className="h-3.5 w-3.5" />
               Back to quizzes
             </button>
-            <h3 className="font-display text-2xl font-semibold text-parchment">{selectedQuiz.title}</h3>
+            <h3 className="text-2xl font-semibold text-parchment">{selectedQuiz.title}</h3>
             <p className="mt-2 text-sm text-muted">{selectedQuiz.description}</p>
             {selectedQuiz.timeLimitMinutes && (
-              <p className="mt-2 text-xs text-muted">Time limit: {selectedQuiz.timeLimitMinutes} minutes</p>
+              <p className="badge-neutral mt-3"><ClockIcon className="h-3 w-3" />{selectedQuiz.timeLimitMinutes} minute limit</p>
             )}
           </div>
 
           {selectedQuiz.questions.map((question, questionIndex) => (
             <fieldset key={`${questionIndex}-${question.questionText}`} className="flex flex-col gap-3">
-              <legend className="mb-3 font-medium text-parchment">
-                {questionIndex + 1}. {question.questionText}
-                <span className="ml-2 text-xs text-muted">{question.points} pts</span>
+              <legend className="mb-3 flex w-full items-start gap-3 font-medium text-parchment">
+                <span className="flex h-6 w-6 flex-none items-center justify-center rounded-md bg-gold/15 text-xs font-bold text-gold">{questionIndex + 1}</span>
+                <span className="flex-1">{question.questionText}</span>
+                <span className="badge-neutral flex-none">{question.points} pts</span>
               </legend>
               {question.options.map((option, optionIndex) => (
                 <label
                   key={`${optionIndex}-${option}`}
-                  className={`flex cursor-pointer items-center gap-3 rounded-lg border px-4 py-3 text-sm transition-colors ${
+                  className={`flex cursor-pointer items-center gap-3 rounded-xl border px-4 py-3 text-sm transition duration-150 ${
                     answers[questionIndex] === optionIndex
-                      ? 'border-gold bg-gold/10 text-parchment'
-                      : 'border-night-border text-muted hover:border-gold/50'
+                      ? 'border-gold bg-gold/10 text-parchment shadow-[0_0_0_3px_rgba(232,169,60,0.1)]'
+                      : 'border-night-border bg-night-deep/40 text-muted hover:border-gold/40 hover:text-parchment'
                   }`}
                 >
                   <input
@@ -122,39 +128,45 @@ export function AssignedQuizzes() {
             type="button"
             disabled={isSubmitting || answers.some((answer) => answer < 0)}
             onClick={() => void handleSubmit()}
-            className="self-start rounded-md bg-gold px-4 py-2.5 text-sm font-semibold text-night disabled:cursor-not-allowed disabled:opacity-50"
+            className="btn-primary self-start"
           >
             {isSubmitting ? 'Submitting…' : 'Submit quiz'}
           </button>
         </div>
       ) : latestAttempt ? (
-        <div className="rounded-xl border border-night-border bg-night-panel p-6">
-          <h3 className="font-display text-xl font-semibold text-parchment">Quiz submitted</h3>
-          <p className="mt-2 text-lg text-gold">
-            {latestAttempt.scoreObtained} / {latestAttempt.totalPossiblePoints} points ({latestAttempt.percentageScore}%)
+        <div className="surface animate-scale-in p-8 text-center sm:p-10">
+          <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-leaf/15 text-leaf">
+            <CheckIcon className="h-6 w-6" />
+          </span>
+          <h3 className="mt-4 text-xl font-semibold text-parchment">Quiz submitted</h3>
+          <p className="mt-3 font-display text-5xl font-semibold text-gradient-gold">{latestAttempt.percentageScore}%</p>
+          <p className="mt-2 text-sm text-muted">
+            {latestAttempt.scoreObtained} / {latestAttempt.totalPossiblePoints} points
           </p>
-          <p className="mt-2 text-sm text-muted">{latestAttempt.feedback}</p>
-          <button type="button" onClick={() => setSelectedQuiz(null)} className="mt-4 text-sm text-gold hover:underline">
+          {latestAttempt.feedback && <p className="mx-auto mt-4 max-w-md text-sm leading-relaxed text-muted">{latestAttempt.feedback}</p>}
+          <button type="button" onClick={() => setSelectedQuiz(null)} className="btn-secondary mt-6">
             Return to quizzes
           </button>
         </div>
       ) : quizzes.length === 0 ? (
-        <p className="rounded-xl border border-night-border bg-night-panel p-6 text-sm text-muted">No quizzes have been published yet.</p>
+        <EmptyState icon={<QuizIcon />} title="No quizzes yet" description="When your teacher publishes a quiz, it will appear here." />
       ) : (
         <ul className="grid grid-cols-1 gap-4 md:grid-cols-2">
           {quizzes.map((quiz) => {
             const previousAttempts = attempts.filter((attempt) => attempt.quizId === quiz.id);
             const previous = previousAttempts[0];
             return (
-              <li key={quiz.id} className="flex flex-col rounded-xl border border-night-border bg-night-panel p-5">
-                <h3 className="font-display text-lg font-semibold text-parchment">{quiz.title}</h3>
+              <li key={quiz.id} className="surface-interactive flex flex-col p-6">
+                <h3 className="text-lg font-semibold text-parchment">{quiz.title}</h3>
                 <p className="mt-1 flex-1 text-sm text-muted">{quiz.description}</p>
-                <p className="mt-3 text-xs text-muted">
-                  {quiz.questions.length} questions{quiz.timeLimitMinutes ? ` · ${quiz.timeLimitMinutes} min` : ''}
-                  {previous ? ` · Last score ${previous.percentageScore}%` : ''}
-                </p>
-                <button type="button" onClick={() => beginQuiz(quiz)} className="mt-4 self-start text-sm font-medium text-gold hover:underline">
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <span className="badge-neutral">{quiz.questions.length} questions</span>
+                  {quiz.timeLimitMinutes ? <span className="badge-neutral"><ClockIcon className="h-3 w-3" />{quiz.timeLimitMinutes} min</span> : null}
+                  {previous ? <span className="badge-leaf">Last score {previous.percentageScore}%</span> : null}
+                </div>
+                <button type="button" onClick={() => beginQuiz(quiz)} className="btn-primary btn-sm mt-5 self-start">
                   {previous ? 'Retake quiz' : 'Start quiz'}
+                  <ArrowRightIcon className="h-3.5 w-3.5" />
                 </button>
               </li>
             );
@@ -163,21 +175,26 @@ export function AssignedQuizzes() {
       )}
 
       <div>
-        <h3 className="mb-3 font-display text-lg font-semibold text-parchment">Attempt history</h3>
+        <h3 className="mb-4 text-lg font-semibold text-parchment">Attempt history</h3>
         {attempts.length === 0 ? (
-          <p className="text-sm text-muted">Your completed quizzes will appear here.</p>
+          <EmptyState icon={<InboxIcon />} title="No attempts yet" description="Your completed quizzes will appear here." />
         ) : (
-          <div className="overflow-x-auto rounded-lg border border-night-border">
-            <table className="w-full text-left text-sm">
-              <thead className="bg-night-panel text-xs uppercase text-muted">
-                <tr><th className="px-4 py-3">Quiz</th><th className="px-4 py-3">Score</th><th className="px-4 py-3">Completed</th></tr>
+          <div className="table-wrap overflow-x-auto">
+            <table className="data-table">
+              <thead>
+                <tr><th>Quiz</th><th>Score</th><th>Completed</th></tr>
               </thead>
               <tbody>
                 {attempts.map((attempt) => (
-                  <tr key={attempt.id} className="border-t border-night-border text-parchment">
-                    <td className="px-4 py-3">{attempt.quizTitle}</td>
-                    <td className="px-4 py-3">{attempt.scoreObtained}/{attempt.totalPossiblePoints} ({attempt.percentageScore}%)</td>
-                    <td className="px-4 py-3 text-muted">{new Date(attempt.completedAt).toLocaleString()}</td>
+                  <tr key={attempt.id}>
+                    <td className="font-medium text-parchment">{attempt.quizTitle}</td>
+                    <td>
+                      <span className={attempt.percentageScore >= 75 ? 'badge-leaf' : attempt.percentageScore >= 50 ? 'badge-gold' : 'badge-clay'}>
+                        {attempt.percentageScore}%
+                      </span>
+                      <span className="ml-2 text-xs text-muted">{attempt.scoreObtained}/{attempt.totalPossiblePoints}</span>
+                    </td>
+                    <td className="text-muted">{new Date(attempt.completedAt).toLocaleString()}</td>
                   </tr>
                 ))}
               </tbody>

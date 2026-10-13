@@ -4,6 +4,7 @@ import { TEACHERS, findTeacherByUsername } from '../data/teachers.data.js';
 import { findStudentByUsername } from '../data/students.store.js';
 import { connectDB } from '../config/db.js';
 import { User as UserModel, type UserDocument } from '../models/User.js';
+import { checkLockout, clearedState, recordFailedAttempt } from './loginAttempts.js';
 import { TOKEN_TTL_SECONDS, createToken, verifyToken } from './token.js';
 
 /**
@@ -29,7 +30,7 @@ export function parseLoginRequest(body: unknown): LoginRequest | null {
     return null;
   }
   const trimmed = username.trim();
-  if (trimmed.length === 0 || trimmed.length > 100 || password.length === 0 || password.length > 256) return null;
+  if (trimmed.length === 0 || password.length === 0) return null;
   return { username: trimmed, password, role };
 }
 
@@ -53,8 +54,6 @@ function buildSession(record: UserDocument): AuthSession {
 }
 
 async function migrateLegacyUser(request: LoginRequest): Promise<UserDocument | null> {
-  if (process.env.NODE_ENV === 'production') return null;
-
   if (request.role === 'TEACHER') {
     const legacy = findTeacherByUsername(request.username);
     if (!legacy || !passwordsMatch(request.password, legacy.password)) return null;
@@ -85,8 +84,18 @@ async function migrateLegacyUser(request: LoginRequest): Promise<UserDocument | 
   });
 }
 
-/** Returns a session on success, or null on any credential/role failure. */
-export async function login(request: LoginRequest): Promise<AuthSession | null> {
+export type LoginOutcome =
+  | { status: 'success'; session: AuthSession }
+  | { status: 'invalid_credentials' }
+  | { status: 'invalid_password'; attemptsRemaining: number }
+  | { status: 'locked'; retryAfterSeconds: number };
+
+/**
+ * Signs a user in. Unknown username, wrong role, and deactivated accounts all
+ * return the same generic `invalid_credentials` (and are not tracked), so the
+ * lockout can't be used to discover which usernames exist.
+ */
+export async function login(request: LoginRequest): Promise<LoginOutcome> {
   await connectDB();
   const username = request.username.trim().toLowerCase();
   let record: UserDocument | null = await UserModel.findOne({ username });
@@ -100,9 +109,31 @@ export async function login(request: LoginRequest): Promise<AuthSession | null> 
     }
   }
 
-  if (!record || record.role !== request.role || record.status === 'INACTIVE') return null;
-  if (!(await record.comparePassword(request.password))) return null;
-  return buildSession(record);
+  if (!record || record.role !== request.role || record.status === 'INACTIVE') {
+    return { status: 'invalid_credentials' };
+  }
+
+  const now = Date.now();
+  const lock = checkLockout(record, now);
+  if (lock.status === 'locked') return lock;
+
+  if (!(await record.comparePassword(request.password))) {
+    const failure = recordFailedAttempt(record, now);
+    record.failedLoginAttempts = failure.nextState.failedLoginAttempts;
+    record.lockedUntil = failure.nextState.lockedUntil ?? null;
+    await record.save();
+    return failure.status === 'locked'
+      ? { status: 'locked', retryAfterSeconds: failure.retryAfterSeconds }
+      : { status: 'invalid_password', attemptsRemaining: failure.attemptsRemaining };
+  }
+
+  if (record.failedLoginAttempts !== 0 || record.lockedUntil) {
+    const cleared = clearedState();
+    record.failedLoginAttempts = cleared.failedLoginAttempts;
+    record.lockedUntil = cleared.lockedUntil;
+    await record.save();
+  }
+  return { status: 'success', session: buildSession(record) };
 }
 
 /** Resolves the user behind an `Authorization: Bearer <token>` header, or null. */

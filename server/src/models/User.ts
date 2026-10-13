@@ -13,6 +13,8 @@ export interface UserDocument extends Document {
   section?: string;
   status: AccountStatus;
   createdAt: Date;
+  failedLoginAttempts: number;
+  lockedUntil?: Date | null;
   comparePassword(candidatePassword: string): Promise<boolean>;
 }
 
@@ -25,6 +27,8 @@ const userSchema = new Schema<UserDocument>(
     role: { type: String, enum: ['STUDENT', 'TEACHER'], required: true },
     section: { type: String, trim: true },
     status: { type: String, enum: ['ACTIVE', 'INACTIVE'], default: 'ACTIVE', required: true },
+    failedLoginAttempts: { type: Number, default: 0, required: true },
+    lockedUntil: { type: Date, default: null },
   },
   { timestamps: { createdAt: true, updatedAt: false } },
 );

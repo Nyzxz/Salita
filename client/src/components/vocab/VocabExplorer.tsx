@@ -2,7 +2,8 @@ import { useMemo, useState } from 'react';
 import { CATEGORY_META, type Category } from '@shared/types';
 import { useWords } from '../../hooks/useWords';
 import { ErrorState } from '../common/ErrorState';
-import { LoadingState } from '../common/LoadingState';
+import { CardGridSkeleton } from '../ui/Skeleton';
+import { PageIntro } from '../ui/PageIntro';
 import { CategoryTabs } from './CategoryTabs';
 import { VocabCard } from './VocabCard';
 
@@ -18,18 +19,16 @@ export function VocabExplorer() {
 
   return (
     <section aria-labelledby="explore-heading" className="flex flex-col gap-6">
-      <div>
-        <h2 id="explore-heading" className="font-display text-2xl font-semibold text-parchment">
-          Vocabulary &amp; etymology
-        </h2>
-        <p className="mt-1 max-w-prose text-sm text-muted">
-          {activeMeta ? activeMeta.description : 'Every word here comes with the story behind it.'}
-        </p>
-      </div>
+      <PageIntro
+        id="explore-heading"
+        eyebrow="Vocabulary"
+        title="Vocabulary & etymology"
+        description={activeMeta ? activeMeta.description : 'Every word here comes with the story behind it.'}
+      />
 
       <CategoryTabs categories={CATEGORY_META} active={activeCategory} onChange={setActiveCategory} />
 
-      {isLoading && <LoadingState label="Loading vocabulary…" />}
+      {isLoading && <CardGridSkeleton />}
       {error && <ErrorState message={error} />}
 
       {words && !isLoading && !error && (

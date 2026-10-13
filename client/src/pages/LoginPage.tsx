@@ -1,10 +1,12 @@
 import { useState, type FormEvent } from 'react';
-import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
+import { Navigate, useLocation, useNavigate } from 'react-router-dom';
 import type { UserRole } from '@shared/types';
 import { ApiRequestError } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
 import { dashboardPathFor } from '../auth/routes';
-import { ArrowLeftIcon, LockIcon, UserIcon } from '../components/common/icons';
+import { Brand } from '../components/common/Brand';
+import { BookIcon, ChartIcon, EyeIcon, EyeOffIcon, LockIcon, QuizIcon, UserIcon } from '../components/common/icons';
+import { Notice } from '../components/ui/Notice';
 
 const ROLES: { id: UserRole; label: string; hint: string }[] = [
   { id: 'STUDENT', label: 'Student', hint: 'Learn words, take quizzes, submit work.' },
@@ -21,6 +23,7 @@ export function LoginPage() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const roleIndex = ROLES.findIndex((item) => item.id === role);
 
   if (!isRestoring && session) {
@@ -48,58 +51,67 @@ export function LoginPage() {
   };
 
   const activeRole = ROLES[roleIndex] ?? ROLES[0];
-  const inputClasses =
-    'w-full rounded-lg border border-night-border bg-night py-2.5 pl-10 pr-4 text-parchment placeholder:text-muted/60 transition-shadow focus:border-gold focus:shadow-[0_0_0_3px_rgba(232,169,60,0.18)]';
+  const inputClasses = 'field pl-10';
 
   return (
-    <div className="grid min-h-screen grid-cols-1 lg:grid-cols-[1.1fr_1fr]">
-      <div className="aurora-backdrop relative hidden overflow-hidden bg-night-panel lg:flex lg:flex-col lg:justify-between lg:p-12">
-        <Link to="/" className="relative z-10 font-display text-2xl font-semibold text-parchment">
-          Salita
-          <span aria-hidden="true" className="ml-2 inline-block h-1.5 w-6 rounded-full bg-gold" />
-        </Link>
+    <div className="grid min-h-screen grid-cols-1 lg:grid-cols-[1.15fr_1fr]">
+      <aside className="aurora-backdrop grid-dots relative hidden overflow-hidden border-r border-night-border bg-night-deep lg:flex lg:flex-col lg:justify-between lg:p-14">
+        <Brand className="relative z-10" />
 
-        <div className="relative z-10 max-w-md animate-fade-in-up">
-          <p className="font-display text-4xl font-semibold leading-tight text-parchment">
-            Filipino words,
+        <div className="relative z-10 max-w-lg animate-fade-in-up">
+          <p className="eyebrow">Filipino language &amp; culture</p>
+          <h2 className="mt-4 text-5xl font-semibold leading-[1.1] text-parchment">
+            Learn the words.
             <br />
-            and the history
-            <br />
-            packed inside them.
+            <span className="text-gradient-gold">Discover the stories.</span>
+          </h2>
+          <p className="mt-5 max-w-md text-base leading-relaxed text-muted">
+            A guided classroom for Filipino vocabulary and the history packed inside every word —
+            lectures, quizzes, and tasks from your teacher, all in one place.
           </p>
-          <p className="mt-4 text-sm leading-relaxed text-muted">
-            Sign in to pick up where you left off — vocabulary, quizzes, and the activities your
-            teacher has set for you.
-          </p>
+
+          <ul className="mt-10 grid gap-4">
+            {[
+              { icon: BookIcon, title: 'Lectures with etymology', text: 'Every word comes with its cultural and historical context.' },
+              { icon: QuizIcon, title: 'Scored quizzes', text: 'Test yourself and see your results saved to your account.' },
+              { icon: ChartIcon, title: 'Grades & feedback', text: 'Track your progress and read your teacher’s feedback.' },
+            ].map(({ icon: Icon, title, text }) => (
+              <li key={title} className="flex items-start gap-4">
+                <span className="flex h-10 w-10 flex-none items-center justify-center rounded-xl border border-gold/25 bg-gold/10 text-gold">
+                  <Icon className="h-5 w-5" />
+                </span>
+                <div>
+                  <p className="text-sm font-semibold text-parchment">{title}</p>
+                  <p className="text-sm text-muted">{text}</p>
+                </div>
+              </li>
+            ))}
+          </ul>
         </div>
 
-        <p className="relative z-10 text-xs text-muted">
-          Mabuhay! Six centuries of trade, colonization, and slang, one word at a time.
-        </p>
-      </div>
+        <p className="relative z-10 text-xs text-muted">Mabuhay! Six centuries of trade, colonization, and slang — one word at a time.</p>
+      </aside>
 
-      <div className="flex min-h-screen flex-col items-center justify-center px-6 py-12">
-        <div className="w-full max-w-md animate-fade-in-up">
-          <Link
-            to="/"
-            className="mb-6 inline-flex items-center gap-1.5 text-sm text-muted transition-colors hover:text-parchment lg:hidden"
-          >
-            <ArrowLeftIcon className="h-4 w-4" />
-            Salita
-          </Link>
+      <main className="flex min-h-screen flex-col items-center justify-center px-5 py-12 sm:px-8">
+        <div className="mb-8 lg:hidden">
+          <Brand />
+        </div>
 
-          <div className="rounded-2xl border border-night-border bg-night-panel p-6 shadow-xl shadow-black/20 sm:p-8">
-            <h1 className="font-display text-2xl font-semibold text-parchment">Sign in</h1>
-            <p className="mt-1 text-sm text-muted">Choose how you&apos;ll be using Salita.</p>
+        <div className="w-full max-w-[26rem] animate-scale-in">
+          <div className="mb-7">
+            <h1 className="text-3xl font-semibold text-parchment">Welcome back</h1>
+            <p className="mt-2 text-sm text-muted">Sign in to continue to your Salita workspace.</p>
+          </div>
 
+          <div className="surface p-6 sm:p-7">
             <div
               role="group"
               aria-label="Account type"
-              className="relative mt-5 grid grid-cols-2 rounded-lg bg-night p-1"
+              className="relative grid grid-cols-2 rounded-xl border border-night-border bg-night-deep p-1"
             >
               <span
                 aria-hidden="true"
-                className="absolute inset-1 w-1/2 rounded-md bg-gold shadow-sm transition-transform duration-300 ease-out"
+                className="absolute inset-y-1 left-1 w-[calc(50%-0.25rem)] rounded-lg bg-night-raised shadow-sm ring-1 ring-gold/40 transition-transform duration-300 ease-out"
                 style={{ transform: `translateX(${roleIndex * 100}%)` }}
               />
               {ROLES.map((item) => {
@@ -110,8 +122,8 @@ export function LoginPage() {
                     type="button"
                     aria-pressed={isActive}
                     onClick={() => chooseRole(item.id)}
-                    className={`relative z-10 rounded-md px-4 py-2 text-sm font-medium transition-colors ${
-                      isActive ? 'text-night' : 'text-muted hover:text-parchment'
+                    className={`relative z-10 rounded-lg px-4 py-2 text-sm font-semibold transition-colors ${
+                      isActive ? 'text-gold-soft' : 'text-muted hover:text-parchment'
                     }`}
                   >
                     {item.label}
@@ -119,15 +131,15 @@ export function LoginPage() {
                 );
               })}
             </div>
-            <p className="mt-2 text-xs text-muted">{activeRole.hint}</p>
+            <p className="mt-2.5 text-xs text-muted">{activeRole.hint}</p>
 
-            <form onSubmit={handleSubmit} className="mt-6 flex flex-col gap-4">
+            <form onSubmit={handleSubmit} className="mt-6 flex flex-col gap-5">
               <div>
-                <label htmlFor="username" className="mb-1.5 block text-sm text-parchment">
+                <label htmlFor="username" className="field-label">
                   Username
                 </label>
                 <div className="relative">
-                  <UserIcon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
+                  <UserIcon className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
                   <input
                     id="username"
                     name="username"
@@ -139,57 +151,58 @@ export function LoginPage() {
                     value={username}
                     onChange={(event) => setUsername(event.target.value)}
                     className={inputClasses}
+                    placeholder="Enter your username"
                   />
                 </div>
               </div>
 
               <div>
-                <label htmlFor="password" className="mb-1.5 block text-sm text-parchment">
+                <label htmlFor="password" className="field-label">
                   Password
                 </label>
                 <div className="relative">
-                  <LockIcon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
+                  <LockIcon className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
                   <input
                     id="password"
                     name="password"
-                    type="password"
+                    type={showPassword ? 'text' : 'password'}
                     autoComplete="current-password"
                     required
                     value={password}
                     onChange={(event) => setPassword(event.target.value)}
-                    className={inputClasses}
+                    className={`${inputClasses} pr-11`}
+                    placeholder="Enter your password"
                   />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword((current) => !current)}
+                    aria-label={showPassword ? 'Hide password' : 'Show password'}
+                    className="absolute right-2 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-md text-muted transition-colors hover:bg-white/5 hover:text-parchment"
+                  >
+                    {showPassword ? <EyeOffIcon className="h-4 w-4" /> : <EyeIcon className="h-4 w-4" />}
+                  </button>
                 </div>
               </div>
 
-              {error && (
-                <p
-                  role="alert"
-                  className="animate-fade-in rounded-lg border border-clay/40 bg-clay/10 px-4 py-3 text-sm text-parchment"
-                >
-                  {error}
-                </p>
-              )}
+              {error && <Notice tone="error">{error}</Notice>}
 
-              <button
-                type="submit"
-                disabled={isSubmitting}
-                className="group relative overflow-hidden rounded-lg bg-gradient-to-r from-gold to-gold-soft px-4 py-2.5 text-sm font-semibold text-night shadow-md shadow-gold/20 transition-all hover:shadow-lg hover:shadow-gold/30 disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                <span className="flex items-center justify-center gap-2">
-                  {isSubmitting && (
-                    <span
-                      aria-hidden="true"
-                      className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-night/30 border-t-night"
-                    />
-                  )}
-                  {isSubmitting ? 'Signing in…' : `Sign in as ${activeRole.label.toLowerCase()}`}
-                </span>
+              <button type="submit" disabled={isSubmitting} className="btn-primary w-full py-3">
+                {isSubmitting && (
+                  <span
+                    aria-hidden="true"
+                    className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-night/30 border-t-night"
+                  />
+                )}
+                {isSubmitting ? 'Signing in…' : `Sign in as ${activeRole.label.toLowerCase()}`}
               </button>
             </form>
           </div>
+
+          <p className="mt-6 text-center text-xs leading-relaxed text-muted">
+            Accounts are created by your teacher. Trouble signing in? Ask your teacher to reset your password.
+          </p>
         </div>
-      </div>
+      </main>
     </div>
   );
 }

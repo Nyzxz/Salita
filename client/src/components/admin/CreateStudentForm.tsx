@@ -1,5 +1,6 @@
 import { useState, type ChangeEvent, type FormEvent } from 'react';
 import type { CreateStudentRequest } from '@shared/types';
+import { Notice } from '../ui/Notice';
 
 interface CreateStudentFormProps {
   onSubmit: (request: CreateStudentRequest) => Promise<void>;
@@ -15,8 +16,7 @@ const EMPTY: CreateStudentRequest = {
   section: '',
 };
 
-const inputClasses =
-  'w-full rounded-lg border border-night-border bg-night px-3.5 py-2.5 text-sm text-parchment placeholder:text-muted/60 focus:border-gold';
+const inputClasses = 'field';
 
 export function CreateStudentForm({ onSubmit, isSaving, error }: CreateStudentFormProps) {
   const [form, setForm] = useState<CreateStudentRequest>(EMPTY);
@@ -37,9 +37,9 @@ export function CreateStudentForm({ onSubmit, isSaving, error }: CreateStudentFo
   };
 
   return (
-    <form onSubmit={handleSubmit} className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-      <label className="flex flex-col gap-1.5 text-sm text-parchment">
-        Full name
+    <form onSubmit={handleSubmit} className="grid grid-cols-1 gap-5">
+      <label className="block">
+        <span className="field-label">Full name</span>
         <input
           required
           value={form.fullName}
@@ -49,8 +49,8 @@ export function CreateStudentForm({ onSubmit, isSaving, error }: CreateStudentFo
         />
       </label>
 
-      <label className="flex flex-col gap-1.5 text-sm text-parchment">
-        Username
+      <label className="block">
+        <span className="field-label">Username</span>
         <input
           required
           value={form.username}
@@ -62,8 +62,8 @@ export function CreateStudentForm({ onSubmit, isSaving, error }: CreateStudentFo
         />
       </label>
 
-      <label className="flex flex-col gap-1.5 text-sm text-parchment">
-        Email address
+      <label className="block">
+        <span className="field-label">Email address</span>
         <input
           required
           type="email"
@@ -74,8 +74,8 @@ export function CreateStudentForm({ onSubmit, isSaving, error }: CreateStudentFo
         />
       </label>
 
-      <label className="flex flex-col gap-1.5 text-sm text-parchment">
-        Initial password
+      <label className="block">
+        <span className="field-label">Initial password</span>
         <input
           required
           type="text"
@@ -87,8 +87,8 @@ export function CreateStudentForm({ onSubmit, isSaving, error }: CreateStudentFo
         />
       </label>
 
-      <label className="flex flex-col gap-1.5 text-sm text-parchment sm:col-span-2">
-        Section
+      <label className="block">
+        <span className="field-label">Section</span>
         <input
           required
           value={form.section}
@@ -99,17 +99,11 @@ export function CreateStudentForm({ onSubmit, isSaving, error }: CreateStudentFo
       </label>
 
       {error && (
-        <p role="alert" className="sm:col-span-2 rounded-lg border border-clay/40 bg-clay/10 px-4 py-2.5 text-sm text-parchment">
-          {error}
-        </p>
+        <Notice tone="error">{error}</Notice>
       )}
 
-      <div className="sm:col-span-2">
-        <button
-          type="submit"
-          disabled={isSaving}
-          className="rounded-lg bg-gold px-4 py-2.5 text-sm font-semibold text-night transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
-        >
+      <div>
+        <button type="submit" disabled={isSaving} className="btn-primary w-full">
           {isSaving ? 'Creating…' : 'Create account'}
         </button>
       </div>

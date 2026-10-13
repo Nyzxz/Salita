@@ -1,10 +1,14 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { VALID_CATEGORIES, type Category, type CreateActivityTaskRequest, type CreateLectureRequest, type CreateQuizRequest, type QuizAttemptRecord, type QuizContent, type TaskType } from '@shared/types';
 import { useAuth } from '../../auth/AuthContext';
 import { ApiRequestError } from '../../api/client';
 import { createQuiz, fetchQuizResults } from '../../api/quizzes';
 import { createActivityTask, createLecture } from '../../api/content';
 import { DashboardShell } from '../../components/layout/DashboardShell';
+import { BackLink } from '../../components/layout/BackLink';
+import { BookIcon, ChartIcon, PlusIcon, QuizIcon, TargetIcon, TrashIcon } from '../../components/common/icons';
+import { EmptyState } from '../../components/ui/EmptyState';
+import { Notice } from '../../components/ui/Notice';
 
 interface DraftQuestion {
   questionText: string;
@@ -20,6 +24,32 @@ const emptyQuestion = (): DraftQuestion => ({
   points: 1,
 });
 
+type StudioTab = 'lectures' | 'quizzes' | 'tasks';
+
+const TABS = [
+  { id: 'lectures', label: 'Write lectures', icon: BookIcon },
+  { id: 'quizzes', label: 'Build quizzes', icon: QuizIcon },
+  { id: 'tasks', label: 'Activities & performance tasks', icon: TargetIcon },
+] as const;
+
+function Field({ label, children, className = '' }: { label: string; children: ReactNode; className?: string }) {
+  return (
+    <label className={`block ${className}`}>
+      <span className="field-label">{label}</span>
+      {children}
+    </label>
+  );
+}
+
+function FormHeading({ id, title, description }: { id: string; title: string; description: string }) {
+  return (
+    <div>
+      <h2 id={id} className="text-xl font-semibold text-parchment">{title}</h2>
+      <p className="mt-1 text-sm text-muted">{description}</p>
+    </div>
+  );
+}
+
 export function ContentStudioPage() {
   const { session } = useAuth();
   const token = session?.token ?? '';
@@ -32,7 +62,7 @@ export function ContentStudioPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'lectures' | 'quizzes' | 'tasks'>('quizzes');
+  const [activeTab, setActiveTab] = useState<StudioTab>('quizzes');
 
   useEffect(() => {
     let active = true;
@@ -82,107 +112,132 @@ export function ContentStudioPage() {
   };
 
   return (
-    <DashboardShell title="Content studio" subtitle="Create lectures, quizzes, and assignments, then review student performance.">
-      <div role="tablist" aria-label="Content type" className="mb-8 flex flex-wrap gap-2 border-b border-night-border">
-        {([
-          ['lectures', 'Write lectures'],
-          ['quizzes', 'Build quizzes'],
-          ['tasks', 'Activities & performance tasks'],
-        ] as const).map(([tab, label]) => (
-          <button key={tab} type="button" role="tab" aria-selected={activeTab === tab} onClick={() => setActiveTab(tab)} className={`border-b-2 px-4 py-3 text-sm font-medium ${activeTab === tab ? 'border-gold text-gold' : 'border-transparent text-muted hover:text-parchment'}`}>
-            {label}
-          </button>
-        ))}
+    <DashboardShell
+      eyebrow="Teacher workspace"
+      title="Content studio"
+      subtitle="Create lectures, quizzes, and assignments, then review student performance."
+      actions={<BackLink />}
+    >
+      <div role="tablist" aria-label="Content type" className="mb-8 flex gap-1 overflow-x-auto border-b border-night-border">
+        {TABS.map(({ id, label, icon: Icon }) => {
+          const isActive = activeTab === id;
+          return (
+            <button
+              key={id}
+              type="button"
+              role="tab"
+              aria-selected={isActive}
+              onClick={() => setActiveTab(id)}
+              className={`-mb-px flex flex-none items-center gap-2 border-b-2 px-4 py-3 text-sm font-medium transition-colors ${
+                isActive ? 'border-gold text-parchment' : 'border-transparent text-muted hover:text-parchment'
+              }`}
+            >
+              <Icon className={`h-4 w-4 ${isActive ? 'text-gold' : ''}`} />
+              {label}
+            </button>
+          );
+        })}
       </div>
 
-      {activeTab === 'lectures' && <LectureBuilder token={token} />}
-      {activeTab === 'tasks' && <ActivityTaskBuilder token={token} />}
-      {activeTab === 'quizzes' && <div className="grid gap-10 xl:grid-cols-[minmax(0,1.2fr)_minmax(360px,0.8fr)]">
-        <section aria-labelledby="quiz-builder-heading">
-          <h2 id="quiz-builder-heading" className="font-display text-2xl font-semibold text-parchment">Build a quiz</h2>
-          <form onSubmit={handleCreate} className="mt-5 flex flex-col gap-5">
-            <label className="flex flex-col gap-1.5 text-sm text-parchment">
-              Quiz title
-              <input required maxLength={160} value={title} onChange={(event) => setTitle(event.target.value)} className="rounded-md border border-night-border bg-night-panel px-3 py-2.5" />
-            </label>
-            <label className="flex flex-col gap-1.5 text-sm text-parchment">
-              Description
-              <textarea required maxLength={2000} rows={3} value={description} onChange={(event) => setDescription(event.target.value)} className="rounded-md border border-night-border bg-night-panel px-3 py-2.5" />
-            </label>
-            <label className="flex max-w-xs flex-col gap-1.5 text-sm text-parchment">
-              Time limit (minutes, optional)
-              <input type="number" min={1} max={600} value={timeLimit} onChange={(event) => setTimeLimit(event.target.value)} className="rounded-md border border-night-border bg-night-panel px-3 py-2.5" />
-            </label>
-
-            {questions.map((question, questionIndex) => (
-              <fieldset key={questionIndex} className="flex flex-col gap-4 border-t border-night-border pt-5">
-                <div className="flex items-center justify-between gap-3">
-                  <legend className="font-display text-lg font-semibold text-parchment">Question {questionIndex + 1}</legend>
-                  {questions.length > 1 && (
-                    <button type="button" onClick={() => setQuestions((current) => current.filter((_, index) => index !== questionIndex))} className="text-sm text-clay hover:underline">Remove</button>
-                  )}
+      <div key={activeTab} className="animate-fade-in-up">
+        {activeTab === 'lectures' && <LectureBuilder token={token} />}
+        {activeTab === 'tasks' && <ActivityTaskBuilder token={token} />}
+        {activeTab === 'quizzes' && (
+          <div className="grid gap-8 xl:grid-cols-[minmax(0,1.2fr)_minmax(360px,0.8fr)]">
+            <section aria-labelledby="quiz-builder-heading">
+              <FormHeading id="quiz-builder-heading" title="Build a quiz" description="Questions are scored on the server, so students can't alter their results." />
+              <form onSubmit={handleCreate} className="mt-5 flex flex-col gap-5">
+                <div className="surface flex flex-col gap-5 p-6">
+                  <Field label="Quiz title">
+                    <input required maxLength={160} value={title} onChange={(event) => setTitle(event.target.value)} className="field" />
+                  </Field>
+                  <Field label="Description">
+                    <textarea required maxLength={2000} rows={3} value={description} onChange={(event) => setDescription(event.target.value)} className="field" />
+                  </Field>
+                  <Field label="Time limit (minutes, optional)" className="max-w-xs">
+                    <input type="number" min={1} max={600} value={timeLimit} onChange={(event) => setTimeLimit(event.target.value)} className="field" />
+                  </Field>
                 </div>
-                <label className="flex flex-col gap-1.5 text-sm text-muted">
-                  Prompt
-                  <input required value={question.questionText} onChange={(event) => updateQuestion(questionIndex, { questionText: event.target.value })} className="rounded-md border border-night-border bg-night-panel px-3 py-2.5 text-parchment" />
-                </label>
-                <div className="grid gap-3 sm:grid-cols-2">
-                  {question.options.map((option, optionIndex) => (
-                    <label key={optionIndex} className="flex flex-col gap-1.5 text-sm text-muted">
-                      Option {String.fromCharCode(65 + optionIndex)}
-                      <input required value={option} onChange={(event) => updateOption(questionIndex, optionIndex, event.target.value)} className="rounded-md border border-night-border bg-night-panel px-3 py-2.5 text-parchment" />
-                    </label>
-                  ))}
-                </div>
-                <div className="flex flex-wrap gap-4">
-                  <label className="flex flex-col gap-1.5 text-sm text-muted">
-                    Correct answer
-                    <select value={question.correctAnswerIndex} onChange={(event) => updateQuestion(questionIndex, { correctAnswerIndex: Number(event.target.value) })} className="rounded-md border border-night-border bg-night-panel px-3 py-2.5 text-parchment">
-                      {question.options.map((_, optionIndex) => <option key={optionIndex} value={optionIndex}>Option {String.fromCharCode(65 + optionIndex)}</option>)}
-                    </select>
-                  </label>
-                  <label className="flex flex-col gap-1.5 text-sm text-muted">
-                    Points
-                    <input type="number" min={1} step={1} required value={question.points} onChange={(event) => updateQuestion(questionIndex, { points: Number(event.target.value) })} className="w-28 rounded-md border border-night-border bg-night-panel px-3 py-2.5 text-parchment" />
-                  </label>
-                </div>
-              </fieldset>
-            ))}
 
-            {error && <p role="alert" className="text-sm text-clay">{error}</p>}
-            {notice && <p role="status" className="text-sm text-leaf">{notice}</p>}
-            <div className="flex flex-wrap gap-3">
-              <button type="button" onClick={() => setQuestions((current) => [...current, emptyQuestion()])} className="rounded-md border border-night-border px-4 py-2.5 text-sm text-parchment hover:border-gold/50">Add question</button>
-              <button type="submit" disabled={isSaving} className="rounded-md bg-gold px-4 py-2.5 text-sm font-semibold text-night disabled:opacity-50">{isSaving ? 'Publishing…' : 'Publish quiz'}</button>
-            </div>
-          </form>
-        </section>
+                {questions.map((question, questionIndex) => (
+                  <fieldset key={questionIndex} className="surface flex flex-col gap-4 p-6">
+                    <div className="flex items-center justify-between gap-3">
+                      <legend className="flex items-center gap-2.5 text-base font-semibold text-parchment">
+                        <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-gold/15 text-xs font-bold text-gold">{questionIndex + 1}</span>
+                        Question {questionIndex + 1}
+                      </legend>
+                      {questions.length > 1 && (
+                        <button type="button" onClick={() => setQuestions((current) => current.filter((_, index) => index !== questionIndex))} className="btn-ghost btn-sm text-clay hover:text-clay">
+                          <TrashIcon className="h-3.5 w-3.5" />
+                          Remove
+                        </button>
+                      )}
+                    </div>
+                    <Field label="Prompt">
+                      <input required value={question.questionText} onChange={(event) => updateQuestion(questionIndex, { questionText: event.target.value })} className="field" />
+                    </Field>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      {question.options.map((option, optionIndex) => (
+                        <Field key={optionIndex} label={`Option ${String.fromCharCode(65 + optionIndex)}${question.correctAnswerIndex === optionIndex ? ' · correct' : ''}`}>
+                          <input required value={option} onChange={(event) => updateOption(questionIndex, optionIndex, event.target.value)} className="field" />
+                        </Field>
+                      ))}
+                    </div>
+                    <div className="flex flex-wrap gap-4">
+                      <Field label="Correct answer">
+                        <select value={question.correctAnswerIndex} onChange={(event) => updateQuestion(questionIndex, { correctAnswerIndex: Number(event.target.value) })} className="field">
+                          {question.options.map((_, optionIndex) => <option key={optionIndex} value={optionIndex}>Option {String.fromCharCode(65 + optionIndex)}</option>)}
+                        </select>
+                      </Field>
+                      <Field label="Points">
+                        <input type="number" min={1} step={1} required value={question.points} onChange={(event) => updateQuestion(questionIndex, { points: Number(event.target.value) })} className="field w-28" />
+                      </Field>
+                    </div>
+                  </fieldset>
+                ))}
 
-        <section aria-labelledby="quiz-results-heading">
-          <h2 id="quiz-results-heading" className="font-display text-2xl font-semibold text-parchment">Student results</h2>
-          <p className="mt-1 text-sm text-muted">Class-wide quiz attempts, newest first.</p>
-          {isLoading ? <p className="mt-5 text-sm text-muted">Loading results…</p> : results.length === 0 ? (
-            <p className="mt-5 text-sm text-muted">No quiz attempts have been submitted yet.</p>
-          ) : (
-            <div className="mt-5 overflow-x-auto rounded-lg border border-night-border">
-              <table className="w-full min-w-[460px] text-left text-sm">
-                <thead className="bg-night-panel text-xs uppercase text-muted">
-                  <tr><th className="px-3 py-3">Student / Quiz</th><th className="px-3 py-3">Score</th><th className="px-3 py-3">Completed</th></tr>
-                </thead>
-                <tbody>
-                  {results.map((result) => (
-                    <tr key={result.id} className="border-t border-night-border align-top text-parchment">
-                      <td className="px-3 py-3"><div>{result.studentName}</div><div className="mt-1 text-xs text-muted">{result.quizTitle}</div></td>
-                      <td className="whitespace-nowrap px-3 py-3">{result.scoreObtained}/{result.totalPossiblePoints}<div className="text-xs text-muted">{result.percentageScore}%</div></td>
-                      <td className="px-3 py-3 text-xs text-muted">{new Date(result.completedAt).toLocaleString()}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </section>
-      </div>}
+                {error && <Notice tone="error">{error}</Notice>}
+                {notice && <Notice tone="success">{notice}</Notice>}
+                <div className="flex flex-wrap gap-3">
+                  <button type="button" onClick={() => setQuestions((current) => [...current, emptyQuestion()])} className="btn-secondary">
+                    <PlusIcon className="h-4 w-4" />
+                    Add question
+                  </button>
+                  <button type="submit" disabled={isSaving} className="btn-primary">{isSaving ? 'Publishing…' : 'Publish quiz'}</button>
+                </div>
+              </form>
+            </section>
+
+            <section aria-labelledby="quiz-results-heading" className="min-w-0">
+              <FormHeading id="quiz-results-heading" title="Student results" description="Class-wide quiz attempts, newest first." />
+              <div className="mt-5">
+                {isLoading ? (
+                  <p className="text-sm text-muted">Loading results…</p>
+                ) : results.length === 0 ? (
+                  <EmptyState icon={<ChartIcon />} title="No attempts yet" description="Scores appear here as soon as students complete a quiz." />
+                ) : (
+                  <div className="table-wrap overflow-x-auto">
+                    <table className="data-table min-w-[460px]">
+                      <thead>
+                        <tr><th>Student / Quiz</th><th>Score</th><th>Completed</th></tr>
+                      </thead>
+                      <tbody>
+                        {results.map((result) => (
+                          <tr key={result.id}>
+                            <td><div className="font-medium text-parchment">{result.studentName}</div><div className="mt-0.5 text-xs text-muted">{result.quizTitle}</div></td>
+                            <td className="whitespace-nowrap"><span className={result.percentageScore >= 75 ? 'badge-leaf' : result.percentageScore >= 50 ? 'badge-gold' : 'badge-clay'}>{result.percentageScore}%</span><div className="mt-1 text-xs text-muted">{result.scoreObtained}/{result.totalPossiblePoints}</div></td>
+                            <td className="text-xs text-muted">{new Date(result.completedAt).toLocaleString()}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            </section>
+          </div>
+        )}
+      </div>
     </DashboardShell>
   );
 }
@@ -216,18 +271,20 @@ function LectureBuilder({ token }: { token: string }) {
   };
 
   return (
-    <section className="max-w-3xl">
-      <h2 className="font-display text-2xl font-semibold text-parchment">Write a lecture</h2>
-      <form onSubmit={(event) => void submit(event)} className="mt-5 grid gap-5 sm:grid-cols-2">
-        <label className="flex flex-col gap-1.5 text-sm text-muted">Word or phrase<input required value={word} onChange={(event) => setWord(event.target.value)} className="rounded-md border border-night-border bg-night-panel px-3 py-2.5 text-parchment" /></label>
-        <label className="flex flex-col gap-1.5 text-sm text-muted">English translation<input required value={translation} onChange={(event) => setTranslation(event.target.value)} className="rounded-md border border-night-border bg-night-panel px-3 py-2.5 text-parchment" /></label>
-        <label className="flex flex-col gap-1.5 text-sm text-muted">Phonetic guide<input required value={phonetic} onChange={(event) => setPhonetic(event.target.value)} className="rounded-md border border-night-border bg-night-panel px-3 py-2.5 text-parchment" /></label>
-        <label className="flex flex-col gap-1.5 text-sm text-muted">Category<select value={category} onChange={(event) => setCategory(event.target.value as Category)} className="rounded-md border border-night-border bg-night-panel px-3 py-2.5 text-parchment">{VALID_CATEGORIES.map((item) => <option key={item} value={item}>{item[0].toUpperCase() + item.slice(1)}</option>)}</select></label>
-        <label className="flex flex-col gap-1.5 text-sm text-muted sm:col-span-2">Historical & cultural etymology note<textarea required rows={4} value={historicalContext} onChange={(event) => setHistoricalContext(event.target.value)} className="rounded-md border border-night-border bg-night-panel px-3 py-2.5 text-parchment" /></label>
-        <label className="flex flex-col gap-1.5 text-sm text-muted sm:col-span-2">Origin tag<input value={etymologyOrigin} onChange={(event) => setEtymologyOrigin(event.target.value)} className="rounded-md border border-night-border bg-night-panel px-3 py-2.5 text-parchment" placeholder="Optional, e.g. Sanskrit" /></label>
-        {error && <p role="alert" className="text-sm text-clay sm:col-span-2">{error}</p>}
-        {notice && <p role="status" className="text-sm text-leaf sm:col-span-2">{notice}</p>}
-        <button type="submit" disabled={isSaving} className="justify-self-start rounded-md bg-gold px-4 py-2.5 text-sm font-semibold text-night disabled:opacity-50">{isSaving ? 'Publishing…' : 'Publish lecture'}</button>
+    <section className="max-w-3xl" aria-labelledby="lecture-heading">
+      <FormHeading id="lecture-heading" title="Write a lecture" description="Add a word with its pronunciation and the story behind it." />
+      <form onSubmit={(event) => void submit(event)} className="surface mt-5 grid gap-5 p-6 sm:grid-cols-2 sm:p-7">
+        <Field label="Word or phrase"><input required value={word} onChange={(event) => setWord(event.target.value)} className="field" /></Field>
+        <Field label="English translation"><input required value={translation} onChange={(event) => setTranslation(event.target.value)} className="field" /></Field>
+        <Field label="Phonetic guide"><input required value={phonetic} onChange={(event) => setPhonetic(event.target.value)} className="field" /></Field>
+        <Field label="Category"><select value={category} onChange={(event) => setCategory(event.target.value as Category)} className="field">{VALID_CATEGORIES.map((item) => <option key={item} value={item}>{item[0].toUpperCase() + item.slice(1)}</option>)}</select></Field>
+        <Field label="Historical & cultural etymology note" className="sm:col-span-2"><textarea required rows={4} value={historicalContext} onChange={(event) => setHistoricalContext(event.target.value)} className="field" /></Field>
+        <Field label="Origin tag" className="sm:col-span-2"><input value={etymologyOrigin} onChange={(event) => setEtymologyOrigin(event.target.value)} className="field" placeholder="Optional, e.g. Sanskrit" /></Field>
+        {error && <Notice tone="error" className="sm:col-span-2">{error}</Notice>}
+        {notice && <Notice tone="success" className="sm:col-span-2">{notice}</Notice>}
+        <div className="sm:col-span-2">
+          <button type="submit" disabled={isSaving} className="btn-primary">{isSaving ? 'Publishing…' : 'Publish lecture'}</button>
+        </div>
       </form>
     </section>
   );
@@ -258,17 +315,19 @@ function ActivityTaskBuilder({ token }: { token: string }) {
   };
 
   return (
-    <section className="max-w-3xl">
-      <h2 className="font-display text-2xl font-semibold text-parchment">Set an activity or performance task</h2>
-      <form onSubmit={(event) => void submit(event)} className="mt-5 grid gap-5 sm:grid-cols-2">
-        <label className="flex flex-col gap-1.5 text-sm text-muted sm:col-span-2">Task title<input required value={title} onChange={(event) => setTitle(event.target.value)} className="rounded-md border border-night-border bg-night-panel px-3 py-2.5 text-parchment" /></label>
-        <label className="flex flex-col gap-1.5 text-sm text-muted">Category<select value={type} onChange={(event) => setType(event.target.value as TaskType)} className="rounded-md border border-night-border bg-night-panel px-3 py-2.5 text-parchment"><option value="ACTIVITY">Activity</option><option value="PERFORMANCE_TASK">Performance task</option></select></label>
-        <label className="flex flex-col gap-1.5 text-sm text-muted">Total points<input type="number" min={1} step={1} required value={totalPoints} onChange={(event) => setTotalPoints(Number(event.target.value))} className="rounded-md border border-night-border bg-night-panel px-3 py-2.5 text-parchment" /></label>
-        <label className="flex flex-col gap-1.5 text-sm text-muted sm:col-span-2">Detailed instructions / prompt<textarea required rows={5} value={description} onChange={(event) => setDescription(event.target.value)} className="rounded-md border border-night-border bg-night-panel px-3 py-2.5 text-parchment" /></label>
-        <label className="flex flex-col gap-1.5 text-sm text-muted">Due date<input type="datetime-local" required value={dueDate} onChange={(event) => setDueDate(event.target.value)} className="rounded-md border border-night-border bg-night-panel px-3 py-2.5 text-parchment" /></label>
-        {error && <p role="alert" className="text-sm text-clay sm:col-span-2">{error}</p>}
-        {notice && <p role="status" className="text-sm text-leaf sm:col-span-2">{notice}</p>}
-        <button type="submit" disabled={isSaving} className="justify-self-start rounded-md bg-gold px-4 py-2.5 text-sm font-semibold text-night disabled:opacity-50">{isSaving ? 'Publishing…' : 'Publish task'}</button>
+    <section className="max-w-3xl" aria-labelledby="task-heading">
+      <FormHeading id="task-heading" title="Set an activity or performance task" description="Students can submit written responses, and you grade them in the Grading center." />
+      <form onSubmit={(event) => void submit(event)} className="surface mt-5 grid gap-5 p-6 sm:grid-cols-2 sm:p-7">
+        <Field label="Task title" className="sm:col-span-2"><input required value={title} onChange={(event) => setTitle(event.target.value)} className="field" /></Field>
+        <Field label="Type"><select value={type} onChange={(event) => setType(event.target.value as TaskType)} className="field"><option value="ACTIVITY">Activity</option><option value="PERFORMANCE_TASK">Performance task</option></select></Field>
+        <Field label="Total points"><input type="number" min={1} step={1} required value={totalPoints} onChange={(event) => setTotalPoints(Number(event.target.value))} className="field" /></Field>
+        <Field label="Detailed instructions / prompt" className="sm:col-span-2"><textarea required rows={5} value={description} onChange={(event) => setDescription(event.target.value)} className="field" /></Field>
+        <Field label="Due date"><input type="datetime-local" required value={dueDate} onChange={(event) => setDueDate(event.target.value)} className="field" /></Field>
+        {error && <Notice tone="error" className="sm:col-span-2">{error}</Notice>}
+        {notice && <Notice tone="success" className="sm:col-span-2">{notice}</Notice>}
+        <div className="sm:col-span-2">
+          <button type="submit" disabled={isSaving} className="btn-primary">{isSaving ? 'Publishing…' : 'Publish task'}</button>
+        </div>
       </form>
     </section>
   );

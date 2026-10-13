@@ -6,17 +6,120 @@
   * {
     @apply border-night-border;
   }
+  html {
+    color-scheme: dark;
+    -webkit-text-size-adjust: 100%;
+  }
   body {
-    @apply font-body;
+    @apply bg-night font-body text-parchment antialiased;
+    background-image:
+      radial-gradient(1100px 520px at 85% -10%, rgba(232, 169, 60, 0.07), transparent 60%),
+      radial-gradient(900px 480px at -10% 0%, rgba(76, 154, 106, 0.05), transparent 55%);
+    background-attachment: fixed;
+    text-rendering: optimizeLegibility;
   }
   h1,
   h2,
   h3 {
-    @apply font-display;
+    @apply font-display tracking-tight;
+  }
+  ::selection {
+    background: rgba(232, 169, 60, 0.35);
+    color: #fff;
   }
   /* Visible keyboard focus everywhere, in place of Tailwind's default ring. */
   :focus-visible {
     @apply outline outline-2 outline-offset-2 outline-gold;
+  }
+  input:focus-visible,
+  textarea:focus-visible,
+  select:focus-visible {
+    outline: none;
+  }
+  /* Slim, unobtrusive scrollbars on dark surfaces. */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: #2b4650 transparent;
+  }
+}
+
+@layer components {
+  /* ---------- Surfaces ---------- */
+  .surface {
+    @apply rounded-2xl border border-night-border bg-night-panel shadow-card;
+  }
+  .surface-interactive {
+    @apply surface transition duration-200 hover:-translate-y-0.5 hover:border-gold/40 hover:shadow-lift;
+  }
+
+  /* ---------- Buttons ---------- */
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold transition duration-150 disabled:cursor-not-allowed disabled:opacity-50 active:scale-[0.98];
+  }
+  .btn-primary {
+    @apply btn bg-gradient-to-b from-gold-soft to-gold text-night shadow-glow hover:brightness-105;
+  }
+  .btn-secondary {
+    @apply btn border border-night-border bg-night-raised text-parchment hover:border-gold/50 hover:bg-night-raised/80;
+  }
+  .btn-ghost {
+    @apply btn px-3 py-2 text-muted hover:bg-white/5 hover:text-parchment;
+  }
+  .btn-danger {
+    @apply btn border border-clay/40 bg-clay/10 text-clay hover:bg-clay/20;
+  }
+  .btn-sm {
+    @apply rounded-md px-3 py-1.5 text-xs;
+  }
+
+  /* ---------- Forms ---------- */
+  .field-label {
+    @apply mb-1.5 block text-xs font-medium uppercase tracking-wider text-muted;
+  }
+  .field {
+    @apply w-full rounded-lg border border-night-border bg-night-deep/70 px-3.5 py-2.5 text-sm text-parchment placeholder:text-muted/50 transition duration-150 hover:border-night-border/80 focus:border-gold focus:bg-night-deep focus:shadow-[0_0_0_3px_rgba(232,169,60,0.16)];
+  }
+
+  /* ---------- Typography helpers ---------- */
+  .eyebrow {
+    @apply text-xs font-semibold uppercase tracking-[0.16em] text-gold-soft;
+  }
+
+  /* ---------- Badges ---------- */
+  .badge {
+    @apply inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-medium;
+  }
+  .badge-neutral {
+    @apply badge border-night-border bg-white/[0.03] text-muted;
+  }
+  .badge-gold {
+    @apply badge border-gold/30 bg-gold/10 text-gold-soft;
+  }
+  .badge-leaf {
+    @apply badge border-leaf/30 bg-leaf/10 text-leaf;
+  }
+  .badge-clay {
+    @apply badge border-clay/30 bg-clay/10 text-clay;
+  }
+
+  /* ---------- Data tables ---------- */
+  .table-wrap {
+    @apply overflow-hidden rounded-2xl border border-night-border bg-night-panel shadow-card;
+  }
+  .data-table {
+    @apply w-full min-w-full text-left text-sm;
+  }
+  .data-table thead {
+    @apply bg-night-deep/60 text-xs uppercase tracking-wider text-muted;
+  }
+  .data-table th {
+    @apply px-5 py-3.5 font-medium;
+  }
+  .data-table td {
+    @apply px-5 py-4 align-top;
+  }
+  .data-table tbody tr {
+    @apply border-t border-night-border transition-colors hover:bg-white/[0.02];
   }
 }
 
@@ -29,9 +132,33 @@
     );
   }
 
+  .skeleton {
+    @apply relative overflow-hidden rounded-lg bg-night-raised;
+  }
+  .skeleton::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    transform: translateX(-100%);
+    background-image: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.06), transparent);
+    animation: shimmer 1.6s infinite;
+  }
+
+  .glass {
+    background: rgba(10, 20, 25, 0.72);
+    -webkit-backdrop-filter: saturate(160%) blur(14px);
+    backdrop-filter: saturate(160%) blur(14px);
+  }
+
+  .text-gradient-gold {
+    background-image: linear-gradient(120deg, #f6d08f, #e8a93c 60%, #d98b2b);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
   /*
-   * Two soft, blurred color fields drifting slowly behind a header or hero.
-   * Pure CSS, no images — kept low-opacity so body text stays easy to read.
+   * Soft color fields drifting slowly behind a header or hero.
    * Apply to a `relative overflow-hidden` container; content needs `relative z-10`.
    */
   .aurora-backdrop::before,
@@ -39,8 +166,8 @@
     content: '';
     position: absolute;
     border-radius: 9999px;
-    filter: blur(60px);
-    opacity: 0.16;
+    filter: blur(70px);
+    opacity: 0.14;
     pointer-events: none;
     z-index: 0;
   }
@@ -59,6 +186,12 @@
     height: 120%;
     background: theme('colors.clay');
     animation: drift 20s ease-in-out infinite reverse;
+  }
+
+  /* Faint dotted grid for hero panels. */
+  .grid-dots {
+    background-image: radial-gradient(rgba(255, 255, 255, 0.07) 1px, transparent 1px);
+    background-size: 22px 22px;
   }
 }
 

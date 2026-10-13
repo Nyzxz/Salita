@@ -16,7 +16,7 @@ export function TeacherDashboard() {
   return (
     <DashboardShell
       title={`${greetingFor(new Date().getHours())}, ${firstName}`}
-      subtitle="Your teaching workspace. Here's what will live on this page."
+      subtitle="Manage your classroom, publish learning content, and review student progress — all in one place."
     >
       <ModuleGrid
         modules={[

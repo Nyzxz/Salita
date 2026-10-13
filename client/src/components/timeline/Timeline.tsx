@@ -3,6 +3,7 @@ import { useMilestones } from '../../hooks/useMilestones';
 import { useWords } from '../../hooks/useWords';
 import { ErrorState } from '../common/ErrorState';
 import { LoadingState } from '../common/LoadingState';
+import { PageIntro } from '../ui/PageIntro';
 import { MilestoneCard } from './MilestoneCard';
 
 export function Timeline() {
@@ -20,14 +21,12 @@ export function Timeline() {
 
   return (
     <section aria-labelledby="timeline-heading" className="flex flex-col gap-6">
-      <div>
-        <h2 id="timeline-heading" className="font-display text-2xl font-semibold text-parchment">
-          How the language got here
-        </h2>
-        <p className="mt-1 max-w-prose text-sm text-muted">
-          Six hundred years of trade, colonization, and invention, compressed into five stops.
-        </p>
-      </div>
+      <PageIntro
+        id="timeline-heading"
+        eyebrow="History"
+        title="How the language got here"
+        description="Six hundred years of trade, colonization, and invention, compressed into five stops."
+      />
 
       {isLoading && <LoadingState label="Loading timeline…" />}
       {error && <ErrorState message={error} />}

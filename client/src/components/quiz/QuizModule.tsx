@@ -3,6 +3,7 @@ import { useQuiz } from '../../hooks/useQuiz';
 import { useWords } from '../../hooks/useWords';
 import { ErrorState } from '../common/ErrorState';
 import { LoadingState } from '../common/LoadingState';
+import { PageIntro } from '../ui/PageIntro';
 import { Flashcard } from './Flashcard';
 
 type Mode = 'flashcards' | 'quiz';
@@ -17,16 +18,14 @@ export function QuizModule() {
 
   return (
     <section aria-labelledby="practice-heading" className="flex flex-col gap-6">
-      <div>
-        <h2 id="practice-heading" className="font-display text-2xl font-semibold text-parchment">
-          Practice
-        </h2>
-        <p className="mt-1 max-w-prose text-sm text-muted">
-          Review with flashcards, then test yourself with a quick quiz.
-        </p>
-      </div>
+      <PageIntro
+        id="practice-heading"
+        eyebrow="Practice"
+        title="Practice"
+        description="Review with flashcards, then test yourself with a quick quiz."
+      />
 
-      <div role="tablist" aria-label="Practice mode" className="flex gap-2">
+      <div role="tablist" aria-label="Practice mode" className="inline-flex w-fit gap-1 rounded-xl border border-night-border bg-night-deep p-1">
         {MODES.map((item) => {
           const isActive = item.id === mode;
           return (
@@ -36,10 +35,8 @@ export function QuizModule() {
               role="tab"
               aria-selected={isActive}
               onClick={() => setMode(item.id)}
-              className={`rounded-full border px-4 py-2 text-sm font-medium transition-colors ${
-                isActive
-                  ? 'border-gold bg-gold text-night'
-                  : 'border-night-border text-muted hover:text-parchment'
+              className={`rounded-lg px-4 py-1.5 text-sm font-semibold transition-colors ${
+                isActive ? 'bg-night-raised text-gold-soft ring-1 ring-gold/40' : 'text-muted hover:text-parchment'
               }`}
             >
               {item.label}
@@ -64,25 +61,25 @@ function FlashcardDeck() {
   const current = words[Math.min(index, words.length - 1)];
 
   return (
-    <div className="flex flex-col items-center gap-4">
+    <div className="flex flex-col items-center gap-5">
       <Flashcard key={current.id} word={current} />
       <div className="flex items-center gap-4">
         <button
           type="button"
           onClick={() => setIndex((i) => Math.max(0, i - 1))}
           disabled={index === 0}
-          className="rounded-md border border-night-border px-3 py-1.5 text-sm text-muted transition-colors hover:text-parchment disabled:cursor-not-allowed disabled:opacity-40"
+          className="btn-secondary btn-sm"
         >
           Previous
         </button>
-        <span className="text-xs text-muted">
+        <span className="min-w-16 text-center text-xs font-medium tabular-nums text-muted">
           {index + 1} / {words.length}
         </span>
         <button
           type="button"
           onClick={() => setIndex((i) => Math.min(words.length - 1, i + 1))}
           disabled={index === words.length - 1}
-          className="rounded-md border border-night-border px-3 py-1.5 text-sm text-muted transition-colors hover:text-parchment disabled:cursor-not-allowed disabled:opacity-40"
+          className="btn-secondary btn-sm"
         >
           Next
         </button>
@@ -112,9 +109,9 @@ function MultipleChoiceQuiz() {
 
   if (isFinished) {
     return (
-      <div className="flex flex-col items-start gap-4 rounded-xl border border-night-border bg-night-panel p-8">
-        <p className="font-display text-2xl font-semibold text-parchment">
-          {score} / {questions.length} correct
+      <div className="surface flex flex-col items-start gap-4 p-8">
+        <p className="font-display text-4xl font-semibold text-gradient-gold">
+          {score} / {questions.length} <span className="text-xl text-parchment">correct</span>
         </p>
         <p className="text-sm text-muted">
           {score === questions.length
@@ -124,7 +121,7 @@ function MultipleChoiceQuiz() {
         <button
           type="button"
           onClick={reload}
-          className="rounded-md bg-gold px-4 py-2 text-sm font-semibold text-night transition-opacity hover:opacity-90"
+          className="btn-primary"
         >
           Play again
         </button>
@@ -149,8 +146,11 @@ function MultipleChoiceQuiz() {
   };
 
   return (
-    <div className="flex flex-col gap-5 rounded-xl border border-night-border bg-night-panel p-6 sm:p-8">
-      <div className="flex items-center justify-between text-xs text-muted">
+    <div className="surface flex flex-col gap-5 p-6 sm:p-8">
+      <div className="h-1.5 overflow-hidden rounded-full bg-night-deep" aria-hidden="true">
+        <div className="h-full rounded-full bg-gradient-to-r from-gold to-gold-soft transition-all duration-500" style={{ width: `${(index / questions.length) * 100}%` }} />
+      </div>
+      <div className="flex items-center justify-between text-xs font-medium text-muted">
         <span>
           Question {index + 1} / {questions.length}
         </span>
@@ -166,7 +166,7 @@ function MultipleChoiceQuiz() {
           const isCorrectChoice = choice === question.correctAnswer;
           const isSelectedChoice = choice === selected;
 
-          let stateClasses = 'border-night-border text-parchment hover:border-gold/50';
+          let stateClasses = 'border-night-border bg-night-deep/40 text-parchment hover:border-gold/50 hover:bg-night-raised';
           if (hasAnswered && isCorrectChoice) {
             stateClasses = 'border-leaf bg-leaf/10 text-leaf';
           } else if (hasAnswered && isSelectedChoice) {
@@ -179,7 +179,7 @@ function MultipleChoiceQuiz() {
               type="button"
               onClick={() => handleSelect(choice)}
               disabled={hasAnswered}
-              className={`rounded-lg border px-4 py-3 text-left text-sm font-medium transition-colors disabled:cursor-default ${stateClasses}`}
+              className={`rounded-xl border px-4 py-3.5 text-left text-sm font-medium transition duration-150 disabled:cursor-default ${stateClasses}`}
             >
               {choice}
             </button>
@@ -188,7 +188,7 @@ function MultipleChoiceQuiz() {
       </div>
 
       {hasAnswered && (
-        <div className="rounded-lg bg-night-raised p-4 text-sm text-muted">
+        <div className="animate-fade-in rounded-xl border border-night-border bg-night-raised p-4 text-sm text-muted">
           <p>
             <span
               className={`font-semibold ${
@@ -202,7 +202,7 @@ function MultipleChoiceQuiz() {
           <button
             type="button"
             onClick={handleNext}
-            className="mt-3 rounded-md bg-gold px-4 py-2 text-sm font-semibold text-night transition-opacity hover:opacity-90"
+            className="btn-primary btn-sm mt-4"
           >
             {index === questions.length - 1 ? 'See results' : 'Next question'}
           </button>

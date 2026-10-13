@@ -13,22 +13,22 @@ export function Flashcard({ word }: FlashcardProps) {
       type="button"
       onClick={() => setIsFlipped((prev) => !prev)}
       aria-label={isFlipped ? 'Show the Filipino word' : 'Reveal the translation and context'}
-      className="flex min-h-[16rem] w-full flex-col items-center justify-center gap-4 rounded-xl border border-night-border bg-night-panel p-8 text-center transition-colors hover:border-gold/50"
+      className="surface-interactive relative flex min-h-[18rem] w-full max-w-2xl flex-col items-center justify-center gap-4 overflow-hidden p-8 text-center"
     >
+      <span aria-hidden="true" className="grid-dots pointer-events-none absolute inset-0 opacity-60" />
+      <span className="badge-neutral relative">{isFlipped ? 'Meaning' : 'Word'}</span>
       {!isFlipped ? (
-        <>
-          <p className="font-display text-4xl font-semibold text-parchment">{word.word}</p>
-          <p className="text-base italic text-gold-soft">{word.phonetic}</p>
-          <p className="mt-4 text-xs text-muted">Tap to reveal meaning</p>
-        </>
+        <div key="front" className="relative animate-scale-in">
+          <p className="font-display text-5xl font-semibold text-parchment">{word.word}</p>
+          <p className="mt-3 text-base italic text-gold-soft">{word.phonetic}</p>
+          <p className="mt-8 text-xs text-muted">Tap to reveal meaning</p>
+        </div>
       ) : (
-        <>
-          <p className="text-lg font-semibold text-gold">{word.translation}</p>
-          <p className="max-w-prose text-sm leading-relaxed text-muted">
-            {word.historicalContext}
-          </p>
-          <p className="mt-4 text-xs text-muted">Tap to flip back</p>
-        </>
+        <div key="back" className="relative animate-scale-in">
+          <p className="text-2xl font-semibold text-gold">{word.translation}</p>
+          <p className="mx-auto mt-3 max-w-prose text-sm leading-relaxed text-muted">{word.historicalContext}</p>
+          <p className="mt-6 text-xs text-muted">Tap to flip back</p>
+        </div>
       )}
     </button>
   );

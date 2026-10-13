@@ -1,6 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import type { ApiResponse, AuthSession } from '../../../shared/src/types.js';
+import type { ApiResponse } from '../../../shared/src/types.js';
 import { login, parseLoginRequest } from '../../../server/src/auth/auth.service.js';
+import { loginOutcomeToHttp } from '../../../server/src/auth/loginOutcome.js';
 
 export default async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
   if (req.method !== 'POST') {
@@ -20,17 +21,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
     return;
   }
 
-  const session = await login(request);
-  if (!session) {
-    const body: ApiResponse<null> = {
-      success: false,
-      data: null,
-      error: 'Incorrect username, password, or role.',
-    };
-    res.status(401).json(body);
-    return;
-  }
-
-  const body: ApiResponse<AuthSession> = { success: true, data: session };
-  res.status(200).json(body);
+  const { status, body } = loginOutcomeToHttp(await login(request));
+  res.status(status).json(body);
 }

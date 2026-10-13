@@ -8,6 +8,7 @@ import { QuizModule } from '../components/quiz/QuizModule';
 import { VocabExplorer } from '../components/vocab/VocabExplorer';
 import { useTasksAndSubmissions } from '../hooks/useTasksAndSubmissions';
 import { AssignedQuizzes } from '../components/quiz/AssignedQuizzes';
+import { AppFooter } from '../components/layout/AppFooter';
 import { AuthoredLectures } from '../components/student/AuthoredLectures';
 
 export function StudentDashboard() {
@@ -30,16 +31,16 @@ export function StudentDashboard() {
         onSignOut={handleSignOut}
       />
 
-      <main className="mx-auto w-full max-w-[1280px] flex-1 px-4 py-10 sm:px-6 xl:px-8">
+      <main className="mx-auto w-full max-w-[1280px] flex-1 px-4 py-10 sm:px-6 sm:py-12 xl:px-8">
         <div key={activeTab} className="animate-fade-in-up">
           {activeTab === 'lectures' && (
-            <div className="flex flex-col gap-10">
+            <div className="flex flex-col gap-14">
               <AuthoredLectures />
               <VocabExplorer />
             </div>
           )}
           {activeTab === 'quizzes' && (
-            <div className="flex flex-col gap-10">
+            <div className="flex flex-col gap-14">
               <AssignedQuizzes />
               <QuizModule />
             </div>
@@ -63,6 +64,8 @@ export function StudentDashboard() {
           {activeTab === 'grades' && <GradesSection learning={learning} />}
         </div>
       </main>
+
+      <AppFooter />
     </div>
   );
 }

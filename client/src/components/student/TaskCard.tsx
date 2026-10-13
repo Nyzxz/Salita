@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import type { ActivityTask, SubmissionRecord } from '@shared/types';
+import { ClockIcon, TargetIcon } from '../common/icons';
+import { Notice } from '../ui/Notice';
 
 interface TaskCardProps {
   task: ActivityTask;
@@ -31,41 +33,37 @@ export function TaskCard({ task, submission, onSubmit }: TaskCardProps) {
     }
   };
 
+  const status = submission
+    ? submission.status === 'GRADED'
+      ? { label: `Graded · ${submission.grade}/${task.totalPoints}`, cls: 'badge-leaf' }
+      : { label: 'Submitted', cls: 'badge-gold' }
+    : isOverdue
+      ? { label: 'Overdue', cls: 'badge-clay' }
+      : { label: 'Not submitted', cls: 'badge-neutral' };
+
   return (
-    <article className="flex flex-col gap-4 rounded-xl border border-night-border bg-night-panel p-6">
+    <article className="surface flex flex-col gap-5 p-6 sm:p-7">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h3 className="font-display text-xl font-semibold text-parchment">{task.title}</h3>
-          <p className="mt-1 text-xs text-muted">
-            Due {formatDueDate(task.dueDate)} · {task.totalPoints} points
+          <h3 className="text-xl font-semibold text-parchment">{task.title}</h3>
+          <p className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted">
+            <span className="inline-flex items-center gap-1.5">
+              <ClockIcon className="h-3.5 w-3.5" />
+              Due {formatDueDate(task.dueDate)}
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <TargetIcon className="h-3.5 w-3.5" />
+              {task.totalPoints} points
+            </span>
           </p>
         </div>
-
-        {submission ? (
-          <span
-            className={`flex-none rounded-full border px-3 py-1 text-xs ${
-              submission.status === 'GRADED'
-                ? 'border-leaf/40 text-leaf'
-                : 'border-gold/40 text-gold'
-            }`}
-          >
-            {submission.status === 'GRADED' ? `Graded: ${submission.grade}/${task.totalPoints}` : 'Submitted'}
-          </span>
-        ) : (
-          <span
-            className={`flex-none rounded-full border px-3 py-1 text-xs ${
-              isOverdue ? 'border-clay/40 text-clay' : 'border-night-border text-muted'
-            }`}
-          >
-            {isOverdue ? 'Overdue' : 'Not submitted'}
-          </span>
-        )}
+        <span className={`${status.cls} flex-none`}>{status.label}</span>
       </div>
 
       <p className="text-sm leading-relaxed text-muted">{task.description}</p>
 
-      <div className="flex flex-col gap-2">
-        <label htmlFor={`submission-${task.id}`} className="text-sm text-parchment">
+      <div className="flex flex-col gap-2 border-t border-night-border pt-5">
+        <label htmlFor={`submission-${task.id}`} className="field-label mb-0">
           {submission ? 'Your submission (resubmitting replaces it)' : 'Your response'}
         </label>
         <textarea
@@ -73,26 +71,26 @@ export function TaskCard({ task, submission, onSubmit }: TaskCardProps) {
           value={content}
           onChange={(event) => setContent(event.target.value)}
           rows={4}
-          className="w-full rounded-lg border border-night-border bg-night px-3.5 py-2.5 text-sm text-parchment placeholder:text-muted/60 focus:border-gold"
+          className="field"
           placeholder="Write your response here…"
         />
-        {error && <p className="text-sm text-clay">{error}</p>}
-        <div>
+        {error && <Notice tone="error">{error}</Notice>}
+        <div className="mt-1">
           <button
             type="button"
             onClick={handleSubmit}
             disabled={isSaving || content.trim().length === 0}
-            className="rounded-lg bg-gold px-4 py-2 text-sm font-semibold text-night transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+            className="btn-primary"
           >
-            {isSaving ? 'Submitting…' : submission ? 'Resubmit' : 'Submit'}
+            {isSaving ? 'Submitting…' : submission ? 'Resubmit' : 'Submit work'}
           </button>
         </div>
       </div>
 
       {submission?.feedback && (
-        <div className="rounded-lg bg-night-raised p-4 text-sm text-muted">
-          <p className="font-semibold text-parchment">Teacher feedback</p>
-          <p className="mt-1">{submission.feedback}</p>
+        <div className="rounded-xl border border-gold/20 bg-gold/5 p-4 text-sm">
+          <p className="eyebrow">Teacher feedback</p>
+          <p className="mt-2 leading-relaxed text-parchment/90">{submission.feedback}</p>
         </div>
       )}
     </article>

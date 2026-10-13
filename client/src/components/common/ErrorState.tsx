@@ -1,3 +1,5 @@
+import { AlertIcon } from './icons';
+
 interface ErrorStateProps {
   message: string;
   onRetry?: () => void;
@@ -7,18 +9,17 @@ export function ErrorState({ message, onRetry }: ErrorStateProps) {
   return (
     <div
       role="alert"
-      className="flex flex-col items-start gap-3 rounded-lg border border-clay/40 bg-clay/10 px-5 py-4 text-parchment"
+      className="flex flex-col items-start gap-4 rounded-2xl border border-clay/35 bg-clay/10 p-5 text-parchment sm:flex-row sm:items-center sm:justify-between"
     >
-      <p>
-        <span className="font-semibold text-clay">Couldn&apos;t load this. </span>
-        {message}
-      </p>
+      <div className="flex items-start gap-3">
+        <AlertIcon className="mt-0.5 h-5 w-5 flex-none text-clay" />
+        <div>
+          <p className="font-semibold">Couldn&apos;t load this</p>
+          <p className="mt-0.5 text-sm text-muted">{message}</p>
+        </div>
+      </div>
       {onRetry && (
-        <button
-          type="button"
-          onClick={onRetry}
-          className="rounded-md border border-clay/60 px-3 py-1.5 text-sm text-clay transition-colors hover:bg-clay/20"
-        >
+        <button type="button" onClick={onRetry} className="btn-danger btn-sm flex-none">
           Try again
         </button>
       )}

@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
 import type { CreateStudentRequest, StudentAccount } from '@shared/types';
 import { createStudentAccount, fetchStudents, updateStudentAccount } from '../../api/admin';
 import { ApiRequestError } from '../../api/client';
 import { useAuth } from '../../auth/AuthContext';
 import { DashboardShell } from '../../components/layout/DashboardShell';
+import { BackLink } from '../../components/layout/BackLink';
+import { Notice } from '../../components/ui/Notice';
 import { LoadingState } from '../../components/common/LoadingState';
 import { ErrorState } from '../../components/common/ErrorState';
 import { CreateStudentForm } from '../../components/admin/CreateStudentForm';
@@ -81,46 +82,53 @@ export function UserManagementPage() {
     }
   };
 
+  const activeCount = students?.filter((student) => student.status === 'ACTIVE').length ?? 0;
+
   return (
     <DashboardShell
+      eyebrow="Teacher workspace"
       title="User management"
       subtitle="Create student accounts and manage who can sign in."
+      actions={<BackLink />}
     >
-      <Link
-        to="/dashboard/admin"
-        className="mb-6 inline-block text-sm text-muted underline-offset-2 hover:text-parchment hover:underline"
-      >
-        ← Back to dashboard
-      </Link>
+      {successMessage && <Notice tone="success" className="mb-6">{successMessage}</Notice>}
 
-      {successMessage && (
-        <p className="mb-6 rounded-lg border border-leaf/40 bg-leaf/10 px-4 py-3 text-sm text-leaf">
-          {successMessage}
-        </p>
-      )}
+      <div className="grid gap-8 xl:grid-cols-[minmax(0,26rem)_minmax(0,1fr)]">
+        <section aria-labelledby="add-student-heading">
+          <h2 id="add-student-heading" className="text-xl font-semibold text-parchment">Add a student</h2>
+          <p className="mt-1 text-sm text-muted">They can sign in right away with these details.</p>
+          <div className="surface mt-5 p-6">
+            <CreateStudentForm onSubmit={handleCreate} isSaving={isSaving} error={formError} />
+          </div>
+        </section>
 
-      <section className="mb-10">
-        <h2 className="font-display text-xl font-semibold text-parchment">Add a student</h2>
-        <div className="mt-4 rounded-xl border border-night-border bg-night-panel p-6">
-          <CreateStudentForm onSubmit={handleCreate} isSaving={isSaving} error={formError} />
-        </div>
-      </section>
-
-      <section>
-        <h2 className="font-display text-xl font-semibold text-parchment">Student directory</h2>
-        <div className="mt-4">
-          {isLoading && <LoadingState label="Loading students…" />}
-          {loadError && <ErrorState message={loadError} onRetry={load} />}
-          {students && !isLoading && !loadError && (
-            <StudentDirectoryTable
-              students={students}
-              pendingActionId={pendingActionId}
-              onToggleStatus={handleToggleStatus}
-              onResetPassword={handleResetPassword}
-            />
-          )}
-        </div>
-      </section>
+        <section aria-labelledby="directory-heading" className="min-w-0">
+          <div className="flex flex-wrap items-end justify-between gap-3">
+            <div>
+              <h2 id="directory-heading" className="text-xl font-semibold text-parchment">Student directory</h2>
+              <p className="mt-1 text-sm text-muted">Reset passwords and activate or deactivate accounts.</p>
+            </div>
+            {students && (
+              <div className="flex gap-2">
+                <span className="badge-neutral">{students.length} total</span>
+                <span className="badge-leaf">{activeCount} active</span>
+              </div>
+            )}
+          </div>
+          <div className="mt-5">
+            {isLoading && <LoadingState label="Loading students…" />}
+            {loadError && <ErrorState message={loadError} onRetry={load} />}
+            {students && !isLoading && !loadError && (
+              <StudentDirectoryTable
+                students={students}
+                pendingActionId={pendingActionId}
+                onToggleStatus={handleToggleStatus}
+                onResetPassword={handleResetPassword}
+              />
+            )}
+          </div>
+        </section>
+      </div>
     </DashboardShell>
   );
 }

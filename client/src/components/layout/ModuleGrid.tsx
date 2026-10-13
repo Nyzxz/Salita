@@ -1,6 +1,6 @@
 import type { ComponentType, SVGProps } from 'react';
 import { Link } from 'react-router-dom';
-import { ChevronRightIcon } from '../common/icons';
+import { ArrowRightIcon } from '../common/icons';
 
 export interface ModuleInfo {
   title: string;
@@ -12,7 +12,7 @@ export interface ModuleInfo {
 
 export function ModuleGrid({ modules }: { modules: ModuleInfo[] }) {
   return (
-    <ul className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+    <ul className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">
       {modules.map((module, index) => {
         const Icon = module.icon;
         const isActive = Boolean(module.href);
@@ -21,37 +21,33 @@ export function ModuleGrid({ modules }: { modules: ModuleInfo[] }) {
           <>
             <div className="flex items-start justify-between gap-3">
               <span
-                className={`flex h-10 w-10 flex-none items-center justify-center rounded-lg ${
-                  isActive ? 'bg-gold/15 text-gold' : 'bg-night-raised text-muted'
+                className={`flex h-12 w-12 flex-none items-center justify-center rounded-xl border transition-colors duration-200 ${
+                  isActive
+                    ? 'border-gold/25 bg-gold/10 text-gold group-hover:bg-gold group-hover:text-night'
+                    : 'border-night-border bg-night-raised text-muted'
                 }`}
               >
-                {Icon && <Icon className="h-5 w-5" />}
+                {Icon && <Icon className="h-6 w-6" />}
               </span>
-              {!isActive && (
-                <span className="flex-none rounded-full border border-night-border px-2.5 py-0.5 text-xs text-muted">
-                  Coming next
-                </span>
-              )}
+              {!isActive && <span className="badge-neutral">Coming next</span>}
             </div>
 
-            <h2 className="mt-1 font-display text-xl font-semibold text-parchment">{module.title}</h2>
+            <h2 className="mt-3 text-xl font-semibold text-parchment">{module.title}</h2>
             <p className="text-sm leading-relaxed text-muted">{module.description}</p>
 
             {isActive && (
-              <span className="mt-auto flex items-center gap-1 pt-2 text-sm font-medium text-gold">
+              <span className="mt-auto flex items-center gap-1.5 pt-4 text-sm font-medium text-gold">
                 Open
-                <ChevronRightIcon className="h-4 w-4 transition-transform duration-200 group-hover:translate-x-1" />
+                <ArrowRightIcon className="h-4 w-4 transition-transform duration-200 group-hover:translate-x-1" />
               </span>
             )}
           </>
         );
 
-        const className = `group flex h-full flex-col gap-2 rounded-xl border p-6 transition-all duration-200 animate-fade-in-up ${
-          isActive
-            ? 'border-night-border bg-night-panel hover:-translate-y-0.5 hover:border-gold/50 hover:shadow-lg hover:shadow-black/20'
-            : 'border-night-border/60 bg-night-panel/50'
+        const className = `group flex h-full flex-col gap-1 p-6 animate-fade-in-up ${
+          isActive ? 'surface-interactive' : 'surface opacity-60'
         }`;
-        const style = { animationDelay: `${index * 60}ms` };
+        const style = { animationDelay: `${index * 70}ms` };
 
         return (
           <li key={module.title} style={style}>
