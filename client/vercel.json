@@ -16,6 +16,7 @@
     { "source": "/api/content/:resource", "destination": "/api/tasks?content=:resource" },
     { "source": "/api/quizzes", "destination": "/api/quiz?resource=quizzes" },
     { "source": "/api/quizzes/:path*", "destination": "/api/quiz?resource=quizzes&path=:path*" },
+    { "source": "/api/submissions/me", "destination": "/api/submissions?route=me" },
     { "source": "/((?!api/).*)", "destination": "/index.html" }
   ]
 }

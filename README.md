@@ -164,6 +164,11 @@ but its serverless API functions do not run Express middleware. Configure a
 Vercel Firewall or a shared rate-limit service for production login throttling;
 the Express in-memory limiter does not protect serverless functions.
 
+The Vercel deployment uses 11 serverless functions to stay within the Hobby
+plan's 12-function limit. `/api/submissions` and `/api/submissions/me` share
+`client/api/submissions.ts`; the rewrite in `client/vercel.json` routes the
+student's submissions lookup to that shared handler.
+
 ## API reference
 
 All responses use the shared envelope:
