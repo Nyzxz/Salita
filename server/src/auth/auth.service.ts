@@ -142,14 +142,10 @@ export async function getUserFromAuthHeader(header: string | undefined): Promise
   const payload = verifyToken(header.slice('Bearer '.length).trim());
   if (!payload) return null;
 
-  try {
-    await connectDB();
-    const record = await UserModel.findById(payload.sub);
-    if (!record || record.role !== payload.role || record.status === 'INACTIVE') return null;
-    return toPublicUser(record);
-  } catch {
-    return null;
-  }
+  await connectDB();
+  const record = await UserModel.findById(payload.sub);
+  if (!record || record.role !== payload.role || record.status === 'INACTIVE') return null;
+  return toPublicUser(record);
 }
 
 // Kept for anything that still wants the full teacher list (there's only one for now).

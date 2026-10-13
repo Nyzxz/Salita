@@ -9,6 +9,7 @@ import {
 } from 'react';
 import type { AuthSession, LoginRequest } from '@shared/types';
 import { fetchCurrentUser, loginRequest } from '../api/auth';
+import { ApiRequestError } from '../api/client';
 
 const STORAGE_KEY = 'salita.session';
 
@@ -62,8 +63,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .then((user) => {
         if (!cancelled) setSession({ ...stored, user });
       })
-      .catch(() => {
-        writeStoredSession(null);
+      .catch((error: unknown) => {
+        if (cancelled) return;
+        if (error instanceof ApiRequestError && error.status === 401) {
+          writeStoredSession(null);
+          return;
+        }
+        setSession(stored);
       })
       .finally(() => {
         if (!cancelled) setIsRestoring(false);
