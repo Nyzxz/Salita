@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import type { StudentAccount } from '@shared/types';
 import { Avatar } from '../common/Avatar';
-import { UsersIcon } from '../common/icons';
+import { TrashIcon, UsersIcon } from '../common/icons';
+import { generateDefaultPassword } from '../../lib/passwordRules';
 import { EmptyState } from '../ui/EmptyState';
 
 interface StudentDirectoryTableProps {
@@ -9,6 +10,7 @@ interface StudentDirectoryTableProps {
   pendingActionId: string | null;
   onToggleStatus: (student: StudentAccount) => void;
   onResetPassword: (student: StudentAccount, newPassword: string) => void;
+  onDelete: (student: StudentAccount) => void;
 }
 
 function formatDate(iso: string): string {
@@ -20,6 +22,7 @@ export function StudentDirectoryTable({
   pendingActionId,
   onToggleStatus,
   onResetPassword,
+  onDelete,
 }: StudentDirectoryTableProps) {
   const [resettingId, setResettingId] = useState<string | null>(null);
   const [newPassword, setNewPassword] = useState('');
@@ -30,7 +33,7 @@ export function StudentDirectoryTable({
 
   const startReset = (student: StudentAccount) => {
     setResettingId(student.id);
-    setNewPassword('');
+    setNewPassword(generateDefaultPassword(student.fullName, student.username));
   };
 
   const confirmReset = (student: StudentAccount) => {
@@ -46,7 +49,7 @@ export function StudentDirectoryTable({
         <thead>
           <tr>
             <th>Student</th>
-            <th>Section</th>
+            <th>Grade</th>
             <th>Created</th>
             <th>Status</th>
             <th>Actions</th>
@@ -70,9 +73,12 @@ export function StudentDirectoryTable({
                 <td className="text-muted">{student.section}</td>
                 <td className="whitespace-nowrap text-muted">{formatDate(student.createdAt)}</td>
                 <td>
-                  <span className={student.status === 'ACTIVE' ? 'badge-leaf' : 'badge-clay'}>
-                    {student.status === 'ACTIVE' ? 'Active' : 'Deactivated'}
-                  </span>
+                  <div className="flex flex-col items-start gap-1.5">
+                    <span className={student.status === 'ACTIVE' ? 'badge-leaf' : 'badge-clay'}>
+                      {student.status === 'ACTIVE' ? 'Active' : 'Deactivated'}
+                    </span>
+                    {student.mustChangePassword && <span className="badge-gold">Default password</span>}
+                  </div>
                 </td>
                 <td>
                   {isResetting ? (
@@ -82,7 +88,7 @@ export function StudentDirectoryTable({
                         type="text"
                         value={newPassword}
                         onChange={(e) => setNewPassword(e.target.value)}
-                        placeholder="New password (6+)"
+                        placeholder="New default password"
                         aria-label={`New password for ${student.fullName}`}
                         className="field w-40 py-1.5 text-xs"
                       />
@@ -110,6 +116,17 @@ export function StudentDirectoryTable({
                         className={student.status === 'ACTIVE' ? 'btn-danger btn-sm' : 'btn-secondary btn-sm'}
                       >
                         {isPending ? 'Saving…' : student.status === 'ACTIVE' ? 'Deactivate' : 'Reactivate'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => onDelete(student)}
+                        disabled={isPending}
+                        className="btn-ghost btn-sm text-clay hover:bg-clay/10 hover:text-clay"
+                        aria-label={`Delete ${student.fullName}`}
+                        title="Delete account"
+                      >
+                        <TrashIcon className="h-4 w-4" />
+                        Delete
                       </button>
                     </div>
                   )}

@@ -1,8 +1,12 @@
 import type {
   CreateStudentRequest,
+  GradeLevel,
   StudentAccount,
   UpdateStudentRequest,
 } from '../../../shared/src/types.js';
+import { isGradeLevel } from '../grades.js';
+import { QuizAttempt } from '../models/QuizAttempt.js';
+import { Submission } from '../models/Submission.js';
 import { User as UserModel, type UserDocument } from '../models/User.js';
 
 export type ServiceResult<T> = { ok: true; data: T } | { ok: false; status: number; error: string };
@@ -35,9 +39,9 @@ export function parseCreateStudentRequest(body: unknown): CreateStudentRequest |
     !/^[a-zA-Z0-9._-]{3,40}$/.test(trimmed.username) ||
     trimmed.email.length > 254 ||
     trimmed.password.length > 128 ||
-    trimmed.section.length > 100
+    !isGradeLevel(trimmed.section)
   ) return null;
-  return trimmed;
+  return trimmed as CreateStudentRequest;
 }
 
 /** Checks the update-student request body's shape. Every field is optional. */
@@ -55,8 +59,8 @@ export function parseUpdateStudentRequest(body: unknown): UpdateStudentRequest |
     result.email = email.trim();
   }
   if (section !== undefined) {
-    if (typeof section !== 'string' || section.trim().length === 0 || section.trim().length > 100) return null;
-    result.section = section.trim();
+    if (typeof section !== 'string' || !isGradeLevel(section.trim())) return null;
+    result.section = section.trim() as GradeLevel;
   }
   if (status !== undefined) {
     if (status !== 'ACTIVE' && status !== 'INACTIVE') return null;
@@ -79,6 +83,7 @@ function toStudentAccount(record: UserDocument): StudentAccount {
     section: record.section ?? '',
     createdAt: record.createdAt.toISOString(),
     status: record.status,
+    mustChangePassword: record.mustChangePassword === true,
   };
 }
 
@@ -113,6 +118,8 @@ export async function addStudent(
       password: request.password,
       role: 'STUDENT',
       section: request.section,
+      // The teacher hands over a default password; the student must replace it at first sign-in.
+      mustChangePassword: true,
     });
     return { ok: true, data: toStudentAccount(record) };
   } catch (error) {
@@ -144,13 +151,44 @@ export async function editStudent(
     if (patch.email !== undefined) record.email = patch.email.toLowerCase();
     if (patch.section !== undefined) record.section = patch.section;
     if (patch.status !== undefined) record.status = patch.status;
-    if (patch.password !== undefined) record.password = patch.password;
+    if (patch.password !== undefined) {
+      record.password = patch.password;
+      // A teacher-set password is a default again: force a change at next sign-in.
+      record.mustChangePassword = true;
+      record.failedLoginAttempts = 0;
+      record.lockedUntil = null;
+    }
     await record.save();
     return { ok: true, data: toStudentAccount(record) };
   } catch (error) {
     if (isDuplicateKeyError(error)) {
       return { ok: false, status: 409, error: 'That email is already in use.' };
     }
+    if (typeof error === 'object' && error !== null && 'name' in error && error.name === 'CastError') {
+      return { ok: false, status: 404, error: `No student found with id "${id}".` };
+    }
+    throw error;
+  }
+}
+
+
+/**
+ * Permanently deletes a student account along with their submissions and quiz
+ * attempts, so no orphaned records are left behind in the gradebook.
+ */
+export async function removeStudent(id: string): Promise<ServiceResult<{ id: string }>> {
+  try {
+    const record = await UserModel.findOne({ _id: id, role: 'STUDENT' });
+    if (!record) {
+      return { ok: false, status: 404, error: `No student found with id "${id}".` };
+    }
+    await Promise.all([
+      Submission.deleteMany({ studentId: record._id }),
+      QuizAttempt.deleteMany({ studentId: record._id }),
+    ]);
+    await record.deleteOne();
+    return { ok: true, data: { id } };
+  } catch (error) {
     if (typeof error === 'object' && error !== null && 'name' in error && error.name === 'CastError') {
       return { ok: false, status: 404, error: `No student found with id "${id}".` };
     }

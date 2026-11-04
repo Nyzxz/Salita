@@ -22,7 +22,7 @@ async function handleContentApi(req: VercelRequest, res: VercelResponse): Promis
   }
 
   if (req.query.content === 'lectures' && req.method === 'GET') {
-    const body: ApiResponse<LectureRecord[]> = { success: true, data: await listLectures() };
+    const body: ApiResponse<LectureRecord[]> = { success: true, data: await listLectures(user as User) };
     res.status(200).json(body);
     return;
   }
@@ -79,6 +79,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
     sendError(res, 405, `Method ${req.method} not allowed.`);
     return;
   }
-  const body: ApiResponse<ActivityTask[]> = { success: true, data: await listActivityTasks() };
+  const body: ApiResponse<ActivityTask[]> = { success: true, data: await listActivityTasks(user as User) };
   res.status(200).json(body);
 }

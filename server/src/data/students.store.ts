@@ -1,6 +1,6 @@
 import type { StudentAccount } from '../../../shared/src/types.js';
 
-export interface StudentRecord extends StudentAccount {
+export interface StudentRecord extends Omit<StudentAccount, 'mustChangePassword'> {
   password: string;
 }
 
@@ -62,7 +62,7 @@ let nextId = STUDENTS.length + 1;
 
 export function toPublicStudent(record: StudentRecord): StudentAccount {
   const { password: _password, ...publicFields } = record;
-  return publicFields;
+  return { ...publicFields, mustChangePassword: false };
 }
 
 export function listStudents(): StudentRecord[] {

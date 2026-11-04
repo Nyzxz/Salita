@@ -30,7 +30,7 @@ export function createApp(): Express {
       origin(origin, callback) {
         callback(null, !origin || allowedOrigins.has(origin));
       },
-      methods: ['GET', 'POST', 'PUT', 'OPTIONS'],
+      methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
       allowedHeaders: ['Authorization', 'Content-Type', 'Accept'],
       maxAge: 600,
     }),

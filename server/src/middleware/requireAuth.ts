@@ -3,9 +3,9 @@ import type { UserRole } from '../../../shared/src/types.js';
 import { getUserFromAuthHeader } from '../auth/auth.service.js';
 import { ApiError } from './errorHandler.js';
 
-export function requireAuth(...allowedRoles: UserRole[]) {
+function buildGuard(allowPasswordChange: boolean, allowedRoles: UserRole[]) {
   return (req: Request, res: Response, next: NextFunction): void => {
-    void getUserFromAuthHeader(req.header('authorization'))
+    void getUserFromAuthHeader(req.header('authorization'), { allowPasswordChange })
       .then((user) => {
         if (!user) {
           next(new ApiError(401, 'You need to sign in to do that.'));
@@ -20,4 +20,18 @@ export function requireAuth(...allowedRoles: UserRole[]) {
       })
       .catch(next);
   };
+}
+
+/**
+ * Requires a signed-in user. Accounts that still have to replace their default
+ * password are refused here, so the forced change can't be skipped by calling
+ * the API directly.
+ */
+export function requireAuth(...allowedRoles: UserRole[]) {
+  return buildGuard(false, allowedRoles);
+}
+
+/** Same as requireAuth, but lets a user who must change their password through. */
+export function requireAuthAllowingPasswordChange(...allowedRoles: UserRole[]) {
+  return buildGuard(true, allowedRoles);
 }

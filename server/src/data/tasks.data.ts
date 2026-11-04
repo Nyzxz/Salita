@@ -5,6 +5,7 @@ export const TASKS: ActivityTask[] = [
   {
     id: 'task-act-1',
     type: 'ACTIVITY',
+    gradeLevel: 'ALL',
     title: 'Write 5 sentences using "po" and "opo"',
     description:
       'Using what you learned in the Greetings lecture, write five short sentences that correctly ' +
@@ -15,6 +16,7 @@ export const TASKS: ActivityTask[] = [
   {
     id: 'task-act-2',
     type: 'ACTIVITY',
+    gradeLevel: 'ALL',
     title: 'Vocabulary reflection: Bahala Na',
     description:
       'In 3-4 sentences, describe a time you (or someone you know) showed the "bahala na" mindset — ' +
@@ -25,6 +27,7 @@ export const TASKS: ActivityTask[] = [
   {
     id: 'task-perf-1',
     type: 'PERFORMANCE_TASK',
+    gradeLevel: 'ALL',
     title: 'Record a 1-minute self-introduction',
     description:
       'Write a short self-introduction script in Filipino (name, where you are learning from, one ' +
@@ -36,6 +39,7 @@ export const TASKS: ActivityTask[] = [
   {
     id: 'task-perf-2',
     type: 'PERFORMANCE_TASK',
+    gradeLevel: 'ALL',
     title: 'Cultural values mini-essay',
     description:
       'Pick two Cultural Values words from the Explore tab and write a short essay (150-250 words) ' +

@@ -1,9 +1,9 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import type { ApiResponse, StudentAccount } from '../../../../shared/src/types.js';
 import { getUserFromAuthHeader } from '../../../../server/src/auth/auth.service.js';
-import { editStudent, parseUpdateStudentRequest } from '../../../../server/src/admin/students.service.js';
+import { editStudent, parseUpdateStudentRequest, removeStudent } from '../../../../server/src/admin/students.service.js';
 
-// Vercel equivalent of PUT /api/admin/students/:id in server/src/routes/admin.routes.ts.
+// Vercel equivalent of PUT and DELETE /api/admin/students/:id in server/src/routes/admin.routes.ts.
 export default async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
   const user = await getUserFromAuthHeader(req.headers.authorization);
   if (!user) {
@@ -14,8 +14,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
     res.status(403).json({ success: false, data: null, error: 'Your account is not allowed to do that.' });
     return;
   }
+  if (req.method === 'DELETE') {
+    const studentId = typeof req.query.id === 'string' ? req.query.id : '';
+    const removed = await removeStudent(studentId);
+    if (!removed.ok) {
+      res.status(removed.status).json({ success: false, data: null, error: removed.error });
+      return;
+    }
+    res.status(200).json({ success: true, data: removed.data });
+    return;
+  }
   if (req.method !== 'PUT') {
-    res.setHeader('Allow', 'PUT');
+    res.setHeader('Allow', 'PUT, DELETE');
     res.status(405).json({ success: false, data: null, error: `Method ${req.method} not allowed.` });
     return;
   }

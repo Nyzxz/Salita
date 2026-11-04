@@ -7,6 +7,7 @@ import { BookIcon } from '../common/icons';
 import { EmptyState } from '../ui/EmptyState';
 import { Notice } from '../ui/Notice';
 import { PageIntro } from '../ui/PageIntro';
+import { gradeLabel } from '../ui/GradeSelect';
 
 export function AuthoredLectures() {
   const { session } = useAuth();
@@ -44,7 +45,10 @@ export function AuthoredLectures() {
             <li key={lecture.id} className="surface-interactive flex flex-col p-6">
               <div className="flex items-start justify-between gap-3">
                 <h3 className="text-xl font-semibold text-parchment">{lecture.word}</h3>
-                <span className="badge-neutral capitalize">{lecture.category}</span>
+                <div className="flex flex-none flex-wrap justify-end gap-1.5">
+                  <span className="badge-gold">{gradeLabel(lecture.gradeLevel)}</span>
+                  <span className="badge-neutral capitalize">{lecture.category}</span>
+                </div>
               </div>
               <p className="mt-1.5 text-sm font-medium text-gold">{lecture.translation}</p>
               <p className="mt-0.5 text-xs italic text-muted">/{lecture.phonetic}/</p>

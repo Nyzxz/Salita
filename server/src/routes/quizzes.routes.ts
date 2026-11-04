@@ -16,7 +16,7 @@ export const quizzesRouter = Router();
 
 quizzesRouter.get('/', requireAuth(), async (_req, res, next) => {
   try {
-    const body: ApiResponse<QuizContent[]> = { success: true, data: await listQuizzes() };
+    const body: ApiResponse<QuizContent[]> = { success: true, data: await listQuizzes(res.locals.user as User) };
     res.json(body);
   } catch (error) {
     next(error);

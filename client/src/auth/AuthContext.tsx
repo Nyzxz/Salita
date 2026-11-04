@@ -7,7 +7,7 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import type { AuthSession, LoginRequest } from '@shared/types';
+import type { AuthSession, LoginRequest, User } from '@shared/types';
 import { fetchCurrentUser, loginRequest } from '../api/auth';
 import { ApiRequestError } from '../api/client';
 
@@ -18,6 +18,10 @@ interface AuthContextValue {
   isRestoring: boolean;
   login: (credentials: LoginRequest) => Promise<AuthSession>;
   logout: () => void;
+  /** Swap in a fresh session (e.g. after a password change issues a new token). */
+  replaceSession: (next: AuthSession) => void;
+  /** Update the signed-in user's details (e.g. after editing their profile). */
+  updateUser: (user: User) => void;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -92,9 +96,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setSession(null);
   }, []);
 
+  const replaceSession = useCallback((next: AuthSession) => {
+    writeStoredSession(next);
+    setSession(next);
+  }, []);
+
+  const updateUser = useCallback((user: User) => {
+    setSession((current) => {
+      if (!current) return current;
+      const next = { ...current, user };
+      writeStoredSession(next);
+      return next;
+    });
+  }, []);
+
   const value = useMemo(
-    () => ({ session, isRestoring, login, logout }),
-    [session, isRestoring, login, logout],
+    () => ({ session, isRestoring, login, logout, replaceSession, updateUser }),
+    [session, isRestoring, login, logout, replaceSession, updateUser],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

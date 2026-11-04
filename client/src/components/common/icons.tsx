@@ -243,3 +243,12 @@ export function ShieldIcon(props: IconProps) {
     </svg>
   );
 }
+
+export function RefreshIcon(props: IconProps) {
+  return (
+    <svg {...base(props)}>
+      <path d="M20 11a8 8 0 0 0-14.3-4.5L4 8.5M4 4v4.5h4.5" />
+      <path d="M4 13a8 8 0 0 0 14.3 4.5L20 15.5M20 20v-4.5h-4.5" />
+    </svg>
+  );
+}

@@ -10,6 +10,7 @@ import { ApiRequestError } from '../../api/client';
 import { ErrorState } from '../common/ErrorState';
 import { LoadingState } from '../common/LoadingState';
 import { EmptyState } from '../ui/EmptyState';
+import { gradeLabel } from '../ui/GradeSelect';
 import { Notice } from '../ui/Notice';
 import { PageIntro } from '../ui/PageIntro';
 import { ArrowLeftIcon, ArrowRightIcon, CheckIcon, ClockIcon, InboxIcon, QuizIcon } from '../common/icons';
@@ -160,6 +161,7 @@ export function AssignedQuizzes() {
                 <h3 className="text-lg font-semibold text-parchment">{quiz.title}</h3>
                 <p className="mt-1 flex-1 text-sm text-muted">{quiz.description}</p>
                 <div className="mt-4 flex flex-wrap gap-2">
+                  <span className="badge-gold">{gradeLabel(quiz.gradeLevel)}</span>
                   <span className="badge-neutral">{quiz.questions.length} questions</span>
                   {quiz.timeLimitMinutes ? <span className="badge-neutral"><ClockIcon className="h-3 w-3" />{quiz.timeLimitMinutes} min</span> : null}
                   {previous ? <span className="badge-leaf">Last score {previous.percentageScore}%</span> : null}

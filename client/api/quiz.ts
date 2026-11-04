@@ -38,7 +38,7 @@ async function handleSavedQuizApi(req: VercelRequest, res: VercelResponse): Prom
 
   const path = queryPath(req.query.path).replace(/^\/+|\/+$/g, '');
   if (!path && req.method === 'GET') {
-    const body: ApiResponse<QuizContent[]> = { success: true, data: await listQuizzes() };
+    const body: ApiResponse<QuizContent[]> = { success: true, data: await listQuizzes(user as User) };
     res.status(200).json(body);
     return;
   }

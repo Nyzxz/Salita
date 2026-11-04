@@ -14,6 +14,7 @@ export interface UserDocument extends Document {
   status: AccountStatus;
   createdAt: Date;
   failedLoginAttempts: number;
+  mustChangePassword: boolean;
   lockedUntil?: Date | null;
   comparePassword(candidatePassword: string): Promise<boolean>;
 }
@@ -28,6 +29,7 @@ const userSchema = new Schema<UserDocument>(
     section: { type: String, trim: true },
     status: { type: String, enum: ['ACTIVE', 'INACTIVE'], default: 'ACTIVE', required: true },
     failedLoginAttempts: { type: Number, default: 0, required: true },
+    mustChangePassword: { type: Boolean, default: false, required: true },
     lockedUntil: { type: Date, default: null },
   },
   { timestamps: { createdAt: true, updatedAt: false } },

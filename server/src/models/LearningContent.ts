@@ -5,6 +5,7 @@ export type LearningContentType = 'LECTURE' | TaskType;
 
 export interface LearningContentDocument extends Document {
   type: LearningContentType;
+  gradeLevel?: string;
   word?: string;
   translation?: string;
   phonetic?: string;
@@ -22,6 +23,7 @@ export interface LearningContentDocument extends Document {
 const learningContentSchema = new Schema<LearningContentDocument>(
   {
     type: { type: String, enum: ['LECTURE', 'ACTIVITY', 'PERFORMANCE_TASK'], required: true, index: true },
+    gradeLevel: { type: String, enum: ['ALL', 'Grade 7', 'Grade 8', 'Grade 9', 'Grade 10', 'Grade 11', 'Grade 12'], default: 'ALL' },
     word: { type: String, trim: true },
     translation: { type: String, trim: true },
     phonetic: { type: String, trim: true },

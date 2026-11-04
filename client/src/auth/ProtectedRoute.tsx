@@ -3,7 +3,7 @@ import { Navigate, useLocation } from 'react-router-dom';
 import type { UserRole } from '@shared/types';
 import { LoadingState } from '../components/common/LoadingState';
 import { useAuth } from './AuthContext';
-import { dashboardPathFor } from './routes';
+import { CHANGE_PASSWORD_PATH, dashboardPathFor } from './routes';
 
 interface ProtectedRouteProps {
   role: UserRole;
@@ -23,6 +23,9 @@ export function ProtectedRoute({ role, children }: ProtectedRouteProps) {
   }
   if (!session) {
     return <Navigate to="/login" replace state={{ from: location.pathname }} />;
+  }
+  if (session.user.mustChangePassword) {
+    return <Navigate to={CHANGE_PASSWORD_PATH} replace />;
   }
   if (session.user.role !== role) {
     return <Navigate to={dashboardPathFor(session.user.role)} replace />;

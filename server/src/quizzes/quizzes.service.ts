@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
 import type {
+  ContentGrade,
   CreateQuizRequest,
   QuizAttemptRecord,
   QuizContent,
@@ -7,6 +8,7 @@ import type {
   User,
 } from '../../../shared/src/types.js';
 import { connectDB } from '../config/db.js';
+import { matchesGrade, parseContentGrade } from '../grades.js';
 import { Quiz, type IQuiz } from '../models/Quiz.js';
 import { QuizAttempt, type IQuizAttempt } from '../models/QuizAttempt.js';
 
@@ -17,7 +19,9 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 export function parseCreateQuizRequest(value: unknown): CreateQuizRequest | null {
   if (!isRecord(value)) return null;
   const { title, description, timeLimitMinutes, questions } = value;
+  const gradeLevel = parseContentGrade(value.gradeLevel);
   if (
+    gradeLevel === null ||
     typeof title !== 'string' ||
     !title.trim() ||
     typeof description !== 'string' ||
@@ -60,6 +64,7 @@ export function parseCreateQuizRequest(value: unknown): CreateQuizRequest | null
   return {
     title: title.trim(),
     description: description.trim(),
+    gradeLevel,
     ...(timeLimitMinutes === undefined ? {} : { timeLimitMinutes: timeLimitMinutes as number }),
     questions: parsedQuestions as CreateQuizRequest['questions'],
   };
@@ -79,6 +84,7 @@ function toQuizContent(quiz: IQuiz): QuizContent {
     title: quiz.title,
     description: quiz.description,
     ...(quiz.timeLimitMinutes ? { timeLimitMinutes: quiz.timeLimitMinutes } : {}),
+    gradeLevel: (quiz.gradeLevel ?? 'ALL') as ContentGrade,
     questions: quiz.questions.map(({ questionText, options, points }) => ({ questionText, options, points })),
     createdBy: String(quiz.createdBy),
     createdAt: quiz.createdAt.toISOString(),
@@ -107,18 +113,20 @@ export async function createQuiz(user: User, request: CreateQuizRequest): Promis
   return toQuizContent(quiz);
 }
 
-export async function listQuizzes(): Promise<QuizContent[]> {
+export async function listQuizzes(viewer?: User): Promise<QuizContent[]> {
   await connectDB();
   const quizzes = await Quiz.find().sort({ createdAt: -1 }).lean();
-  return quizzes.map((quiz) => ({
+  const all = quizzes.map((quiz) => ({
     id: String(quiz._id),
     title: quiz.title,
     description: quiz.description,
     ...(quiz.timeLimitMinutes ? { timeLimitMinutes: quiz.timeLimitMinutes } : {}),
+    gradeLevel: (quiz.gradeLevel ?? 'ALL') as ContentGrade,
     questions: quiz.questions.map(({ questionText, options, points }) => ({ questionText, options, points })),
     createdBy: String(quiz.createdBy),
     createdAt: quiz.createdAt.toISOString(),
   }));
+  return viewer && viewer.role === 'STUDENT' ? all.filter((quiz) => matchesGrade(quiz.gradeLevel, viewer.section)) : all;
 }
 
 export async function submitQuizAttempt(

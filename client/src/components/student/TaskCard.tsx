@@ -2,6 +2,7 @@ import { useState } from 'react';
 import type { ActivityTask, SubmissionRecord } from '@shared/types';
 import { ClockIcon, TargetIcon } from '../common/icons';
 import { Notice } from '../ui/Notice';
+import { gradeLabel } from '../ui/GradeSelect';
 
 interface TaskCardProps {
   task: ActivityTask;
@@ -55,6 +56,7 @@ export function TaskCard({ task, submission, onSubmit }: TaskCardProps) {
               <TargetIcon className="h-3.5 w-3.5" />
               {task.totalPoints} points
             </span>
+            <span className="badge-gold">{gradeLabel(task.gradeLevel)}</span>
           </p>
         </div>
         <span className={`${status.cls} flex-none`}>{status.label}</span>

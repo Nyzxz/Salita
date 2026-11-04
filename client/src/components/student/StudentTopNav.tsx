@@ -8,9 +8,10 @@ import {
   LogOutIcon,
   QuizIcon,
   TargetIcon,
+  UserIcon,
 } from '../common/icons';
 
-export type StudentTab = 'lectures' | 'quizzes' | 'activities' | 'performance' | 'grades';
+export type StudentTab = 'lectures' | 'quizzes' | 'activities' | 'performance' | 'grades' | 'profile';
 
 const TABS: { id: StudentTab; label: string; icon: ComponentType<SVGProps<SVGSVGElement>> }[] = [
   { id: 'lectures', label: 'Lectures', icon: BookIcon },
@@ -18,6 +19,7 @@ const TABS: { id: StudentTab; label: string; icon: ComponentType<SVGProps<SVGSVG
   { id: 'activities', label: 'Activities', icon: ClipboardCheckIcon },
   { id: 'performance', label: 'Performance Tasks', icon: TargetIcon },
   { id: 'grades', label: 'My Grades', icon: ChartIcon },
+  { id: 'profile', label: 'Profile', icon: UserIcon },
 ];
 
 interface StudentTopNavProps {

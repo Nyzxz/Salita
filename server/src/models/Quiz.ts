@@ -11,6 +11,7 @@ export interface IQuiz extends Document {
   title: string;
   description: string;
   timeLimitMinutes?: number;
+  gradeLevel?: string;
   questions: IQuestion[];
   createdBy: Types.ObjectId;
   createdAt: Date;
@@ -31,6 +32,7 @@ const quizSchema = new Schema<IQuiz>(
     title: { type: String, required: true, trim: true, maxlength: 160 },
     description: { type: String, required: true, trim: true, maxlength: 2000 },
     timeLimitMinutes: { type: Number, min: 1, max: 600 },
+    gradeLevel: { type: String, enum: ['ALL', 'Grade 7', 'Grade 8', 'Grade 9', 'Grade 10', 'Grade 11', 'Grade 12'], default: 'ALL' },
     questions: { type: [questionSchema], required: true, validate: (items: IQuestion[]) => items.length > 0 },
     createdBy: { type: Schema.Types.ObjectId, ref: 'User', required: true },
   },

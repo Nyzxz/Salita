@@ -1,15 +1,17 @@
 import { Fragment, useEffect, useMemo, useState } from 'react';
-import type { ActivityTask, QuizAttemptRecord, SubmissionRecord } from '@shared/types';
+import type { ActivityTask, QuizAttemptRecord, SubmissionRecord, TaskType } from '@shared/types';
 import { ErrorState } from '../components/common/ErrorState';
 import { LoadingState } from '../components/common/LoadingState';
 import { DashboardShell } from '../components/layout/DashboardShell';
 import { BackLink } from '../components/layout/BackLink';
 import { Avatar } from '../components/common/Avatar';
-import { ChartIcon, ChevronRightIcon, ClipboardCheckIcon } from '../components/common/icons';
+import { ChartIcon, ChevronRightIcon, ClipboardCheckIcon, QuizIcon, TargetIcon } from '../components/common/icons';
 import { EmptyState } from '../components/ui/EmptyState';
 import { useAuth } from '../auth/AuthContext';
 import { fetchAllSubmissions, fetchTasks, gradeSubmission } from '../api/tasks';
 import { fetchQuizResults } from '../api/quizzes';
+
+type GradingTab = 'activities' | 'performance' | 'quizzes';
 
 interface DraftState {
   [submissionId: string]: {
@@ -28,6 +30,7 @@ export function TeacherGradingPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [savingId, setSavingId] = useState<string | null>(null);
   const [expandedSubmissionId, setExpandedSubmissionId] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<GradingTab>('activities');
 
   const taskLookup = useMemo(
     () => new Map(tasks.map((task) => [task.id, task])),
@@ -142,6 +145,19 @@ export function TeacherGradingPage() {
     }
   };
 
+  const typeOf = (submission: SubmissionRecord): TaskType => taskLookup.get(submission.taskId)?.type ?? 'ACTIVITY';
+  const activitySubmissions = submissions.filter((item) => typeOf(item) === 'ACTIVITY');
+  const performanceSubmissions = submissions.filter((item) => typeOf(item) === 'PERFORMANCE_TASK');
+  const needsGrading = (items: SubmissionRecord[]) => items.filter((item) => item.status !== 'GRADED').length;
+
+  const tabs = [
+    { id: 'activities', label: 'Activities', icon: ClipboardCheckIcon, count: activitySubmissions.length, pending: needsGrading(activitySubmissions) },
+    { id: 'performance', label: 'Performance tasks', icon: TargetIcon, count: performanceSubmissions.length, pending: needsGrading(performanceSubmissions) },
+    { id: 'quizzes', label: 'Quizzes', icon: QuizIcon, count: quizAttempts.length, pending: 0 },
+  ] as const;
+  const visibleSubmissions = activeTab === 'activities' ? activitySubmissions : performanceSubmissions;
+  const tabNoun = activeTab === 'activities' ? 'activity' : 'performance task';
+
   return (
     <DashboardShell
       eyebrow="Teacher workspace"
@@ -149,12 +165,37 @@ export function TeacherGradingPage() {
       subtitle="Review each student submission, assign a score, and leave teacher feedback."
       actions={<BackLink />}
     >
+      <div role="tablist" aria-label="Grading sections" className="mb-8 flex gap-1 overflow-x-auto border-b border-night-border">
+        {tabs.map(({ id, label, icon: Icon, count, pending }) => {
+          const isActive = activeTab === id;
+          return (
+            <button
+              key={id}
+              type="button"
+              role="tab"
+              aria-selected={isActive}
+              onClick={() => setActiveTab(id)}
+              className={`-mb-px flex flex-none items-center gap-2 border-b-2 px-4 py-3 text-sm font-medium transition-colors ${
+                isActive ? 'border-gold text-parchment' : 'border-transparent text-muted hover:text-parchment'
+              }`}
+            >
+              <Icon className={`h-4 w-4 ${isActive ? 'text-gold' : ''}`} />
+              {label}
+              <span className={pending > 0 ? 'badge-gold' : 'badge-neutral'}>{pending > 0 ? `${pending} to grade` : count}</span>
+            </button>
+          );
+        })}
+      </div>
+
+      <div key={activeTab} className="animate-fade-in-up">
+        {activeTab !== 'quizzes' && (
+          <>
       {isLoading ? (
         <LoadingState label="Loading submissions…" />
       ) : error ? (
         <ErrorState message={error} onRetry={() => window.location.reload()} />
-      ) : submissions.length === 0 ? (
-        <EmptyState icon={<ClipboardCheckIcon />} title="No submissions yet" description="Student work will appear here as soon as it's turned in." />
+      ) : visibleSubmissions.length === 0 ? (
+        <EmptyState icon={<ClipboardCheckIcon />} title={`No ${tabNoun} submissions yet`} description="Student work will appear here as soon as it's turned in." />
       ) : (
         <div className="table-wrap">
           <div className="overflow-x-auto">
@@ -170,7 +211,7 @@ export function TeacherGradingPage() {
                 </tr>
               </thead>
               <tbody>
-                {submissions.map((submission) => {
+                {visibleSubmissions.map((submission) => {
                   const task = taskLookup.get(submission.taskId);
                   const draft = drafts[submission.id] ?? {
                     grade: submission.grade?.toString() ?? '',
@@ -265,8 +306,10 @@ export function TeacherGradingPage() {
           </div>
         </div>
       )}
-
-      <section className="mt-12" aria-labelledby="quiz-results-heading">
+          </>
+        )}
+        {activeTab === 'quizzes' && (
+      <section aria-labelledby="quiz-results-heading">
         <h2 id="quiz-results-heading" className="text-xl font-semibold text-parchment">
           Quiz results
         </h2>
@@ -305,6 +348,8 @@ export function TeacherGradingPage() {
           )}
         </div>
       </section>
+        )}
+      </div>
     </DashboardShell>
   );
 }

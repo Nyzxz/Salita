@@ -51,13 +51,13 @@ export function DashboardShell({ title, subtitle, eyebrow = 'Teacher workspace',
       </header>
 
       <div className="aurora-backdrop grid-dots relative overflow-hidden border-b border-night-border">
-        <div className="relative z-10 mx-auto flex max-w-[1280px] flex-wrap items-end justify-between gap-4 px-4 py-10 sm:px-6 sm:py-12 xl:px-8">
+        <div className="relative z-10 mx-auto max-w-[1280px] px-4 py-10 sm:px-6 sm:py-12 xl:px-8">
           <div className="max-w-2xl">
             <p className="eyebrow animate-fade-in-up">{eyebrow}</p>
             <h1 className="animate-fade-in-up mt-2 text-3xl font-semibold text-parchment sm:text-4xl">{title}</h1>
             <p className="animate-fade-in-up mt-3 text-sm leading-relaxed text-muted sm:text-base">{subtitle}</p>
+            {actions && <div className="animate-fade-in-up mt-5">{actions}</div>}
           </div>
-          {actions}
         </div>
       </div>
 

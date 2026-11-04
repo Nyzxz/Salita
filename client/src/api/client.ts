@@ -26,7 +26,7 @@ function getErrorMessage(error: unknown): string | undefined {
 }
 
 interface RequestOptions {
-  method?: 'GET' | 'POST' | 'PUT';
+  method?: 'GET' | 'POST' | 'PUT' | 'DELETE';
   searchParams?: Record<string, string>;
   body?: unknown;
   token?: string;
@@ -84,6 +84,10 @@ export function apiGet<T>(
 
 export function apiPost<T>(path: string, body: unknown, token?: string): Promise<T> {
   return request<T>(path, { method: 'POST', body, token });
+}
+
+export function apiDelete<T>(path: string, token?: string): Promise<T> {
+  return request<T>(path, { method: 'DELETE', token });
 }
 
 export function apiPut<T>(path: string, body: unknown, token?: string): Promise<T> {

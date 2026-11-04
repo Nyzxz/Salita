@@ -3,7 +3,7 @@ import { Navigate, useLocation, useNavigate } from 'react-router-dom';
 import type { UserRole } from '@shared/types';
 import { ApiRequestError } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
-import { dashboardPathFor } from '../auth/routes';
+import { dashboardPathFor, homePathFor } from '../auth/routes';
 import { Brand } from '../components/common/Brand';
 import { BookIcon, ChartIcon, EyeIcon, EyeOffIcon, LockIcon, QuizIcon, UserIcon } from '../components/common/icons';
 import { Notice } from '../components/ui/Notice';
@@ -27,7 +27,7 @@ export function LoginPage() {
   const roleIndex = ROLES.findIndex((item) => item.id === role);
 
   if (!isRestoring && session) {
-    return <Navigate to={dashboardPathFor(session.user.role)} replace />;
+    return <Navigate to={homePathFor(session.user)} replace />;
   }
 
   const chooseRole = (next: UserRole) => {
@@ -41,6 +41,10 @@ export function LoginPage() {
     setIsSubmitting(true);
     try {
       const next = await login({ username, password, role });
+      if (next.user.mustChangePassword) {
+        navigate(homePathFor(next.user), { replace: true });
+        return;
+      }
       const home = dashboardPathFor(next.user.role);
       const from = (location.state as { from?: string } | null)?.from;
       navigate(from?.startsWith(home) ? from : home, { replace: true });

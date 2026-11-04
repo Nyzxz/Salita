@@ -26,7 +26,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
     if (!request) {
       res
         .status(400)
-        .json({ success: false, data: null, error: 'Fill in full name, username, email, password, and section.' });
+        .json({ success: false, data: null, error: 'Fill in full name, username, email, and password, and choose a grade from Grade 7 to Grade 12.' });
       return;
     }
     const result = await addStudent(request);

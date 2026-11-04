@@ -14,7 +14,7 @@ export const contentRouter = Router();
 
 contentRouter.get('/lectures', requireAuth(), async (_req, res, next) => {
   try {
-    const body: ApiResponse<LectureRecord[]> = { success: true, data: await listLectures() };
+    const body: ApiResponse<LectureRecord[]> = { success: true, data: await listLectures(res.locals.user as User) };
     res.json(body);
   } catch (error) {
     next(error);

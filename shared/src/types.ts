@@ -14,6 +14,13 @@ export const VALID_CATEGORIES = ['greetings', 'food', 'values', 'phrases'] as co
  * union type and the runtime validation list can never drift apart. */
 export type Category = (typeof VALID_CATEGORIES)[number];
 
+/** Grade levels offered by the school: Grade 7 to Grade 12 only. */
+export const GRADE_LEVELS = ['Grade 7', 'Grade 8', 'Grade 9', 'Grade 10', 'Grade 11', 'Grade 12'] as const;
+export type GradeLevel = (typeof GRADE_LEVELS)[number];
+
+/** Learning content is aimed at one grade level, or at every grade. */
+export type ContentGrade = GradeLevel | 'ALL';
+
 /** Display metadata for a category tab, kept alongside the id it describes. */
 export interface CategoryMeta {
   id: Category;
@@ -96,6 +103,7 @@ export interface QuizContent {
   title: string;
   description: string;
   timeLimitMinutes?: number;
+  gradeLevel: ContentGrade;
   questions: QuizContentQuestion[];
   createdBy: string;
   createdAt: string;
@@ -104,6 +112,7 @@ export interface QuizContent {
 export interface CreateQuizRequest {
   title: string;
   description: string;
+  gradeLevel: ContentGrade;
   timeLimitMinutes?: number;
   questions: Array<QuizContentQuestion & { correctAnswerIndex: number }>;
 }
@@ -134,10 +143,12 @@ export interface LectureRecord {
   category: Category;
   historicalContext: string;
   etymologyOrigin?: string;
+  gradeLevel: ContentGrade;
   createdAt: string;
 }
 
 export interface CreateLectureRequest {
+  gradeLevel: ContentGrade;
   word: string;
   translation: string;
   phonetic: string;
@@ -147,6 +158,7 @@ export interface CreateLectureRequest {
 }
 
 export interface CreateActivityTaskRequest {
+  gradeLevel: ContentGrade;
   type: TaskType;
   title: string;
   description: string;
@@ -169,6 +181,23 @@ export interface User {
   username: string;
   name: string;
   role: UserRole;
+  email?: string;
+  /** Students only: their grade level, e.g. "Grade 9". */
+  section?: string;
+  /** True until a student replaces the default password a teacher gave them. */
+  mustChangePassword?: boolean;
+}
+
+/** Body of PUT /api/auth/me — a signed-in user editing their own profile. */
+export interface UpdateProfileRequest {
+  fullName?: string;
+  email?: string;
+}
+
+/** Body of POST /api/auth/me?action=password. Responds with a fresh AuthSession. */
+export interface ChangePasswordRequest {
+  currentPassword: string;
+  newPassword: string;
 }
 
 export interface LoginRequest {
@@ -196,6 +225,8 @@ export interface StudentAccount {
   section: string;
   createdAt: string;
   status: 'ACTIVE' | 'INACTIVE';
+  /** True while the student still has the default password a teacher set. */
+  mustChangePassword: boolean;
 }
 
 /** Body of POST /api/admin/students. */
@@ -204,7 +235,8 @@ export interface CreateStudentRequest {
   username: string;
   email: string;
   password: string;
-  section: string;
+  /** One of GRADE_LEVELS. */
+  section: GradeLevel;
 }
 
 /**
@@ -214,7 +246,7 @@ export interface CreateStudentRequest {
 export interface UpdateStudentRequest {
   fullName?: string;
   email?: string;
-  section?: string;
+  section?: GradeLevel;
   status?: StudentAccount['status'];
   password?: string;
 }
@@ -228,6 +260,7 @@ export type TaskType = 'ACTIVITY' | 'PERFORMANCE_TASK';
 export interface ActivityTask {
   id: string;
   type: TaskType;
+  gradeLevel: ContentGrade;
   title: string;
   description: string;
   totalPoints: number;

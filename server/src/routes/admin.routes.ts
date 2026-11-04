@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import type { ApiResponse, StudentAccount, SubmissionRecord } from '../../../shared/src/types.js';
-import { addStudent, editStudent, getAllStudents, parseCreateStudentRequest, parseUpdateStudentRequest } from '../admin/students.service.js';
+import { addStudent, editStudent, getAllStudents, parseCreateStudentRequest, parseUpdateStudentRequest, removeStudent } from '../admin/students.service.js';
 import { ApiError } from '../middleware/errorHandler.js';
 import { requireAuth } from '../middleware/requireAuth.js';
 import {
@@ -57,7 +57,7 @@ adminRouter.post('/students', async (req, res, next) => {
   try {
     const request = parseCreateStudentRequest(req.body);
     if (!request) {
-      throw new ApiError(400, 'Fill in full name, username, email, password, and section.');
+      throw new ApiError(400, 'Fill in full name, username, email, and password, and choose a grade from Grade 7 to Grade 12.');
     }
     const result = await addStudent(request);
     if (!result.ok) throw new ApiError(result.status, result.error);
@@ -80,6 +80,19 @@ adminRouter.put('/students/:id', async (req, res, next) => {
     if (!result.ok) throw new ApiError(result.status, result.error);
 
     const body: ApiResponse<StudentAccount> = { success: true, data: result.data };
+    res.json(body);
+  } catch (err) {
+    next(err);
+  }
+});
+
+
+/** DELETE /api/admin/students/:id — permanently remove a student and their records. */
+adminRouter.delete('/students/:id', async (req, res, next) => {
+  try {
+    const result = await removeStudent(req.params.id);
+    if (!result.ok) throw new ApiError(result.status, result.error);
+    const body: ApiResponse<{ id: string }> = { success: true, data: result.data };
     res.json(body);
   } catch (err) {
     next(err);

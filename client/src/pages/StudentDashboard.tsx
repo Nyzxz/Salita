@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
+import { ProfileSection } from '../components/profile/ProfileSection';
 import { GradesSection } from '../components/student/GradesSection';
 import { StudentTopNav, type StudentTab } from '../components/student/StudentTopNav';
 import { TaskListSection } from '../components/student/TaskListSection';
@@ -62,6 +63,7 @@ export function StudentDashboard() {
             />
           )}
           {activeTab === 'grades' && <GradesSection learning={learning} />}
+          {activeTab === 'profile' && <ProfileSection />}
         </div>
       </main>
 
