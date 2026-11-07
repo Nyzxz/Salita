@@ -22,11 +22,11 @@ export function passwordRules(next: string, current: string, username: string): 
   ];
 }
 
-/** Random default password for a new or reset student, e.g. "Salita-ana-4821". */
+/** Random default password for a new or reset student, e.g. "Salita-ana-482193". */
 export function generateDefaultPassword(fullName: string, username: string): string {
   const base = (username || fullName).toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 8) || 'student';
   const digits = new Uint32Array(1);
   window.crypto.getRandomValues(digits);
-  const suffix = String(1000 + (digits[0] % 9000));
+  const suffix = String(100000 + (digits[0] % 900000));
   return `Salita-${base}-${suffix}`;
 }

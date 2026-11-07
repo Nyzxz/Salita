@@ -14,6 +14,7 @@ import { connectDB } from '../config/db.js';
 import { LearningContent } from '../models/LearningContent.js';
 import { TASKS } from '../data/tasks.data.js';
 import { matchesGrade, parseContentGrade } from '../grades.js';
+import { LIMITS } from '../limits.js';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
@@ -30,7 +31,12 @@ export function parseCreateLectureRequest(value: unknown): CreateLectureRequest 
     typeof phonetic !== 'string' || !phonetic.trim() ||
     typeof category !== 'string' || !VALID_CATEGORIES.includes(category as Category) ||
     typeof historicalContext !== 'string' || !historicalContext.trim() ||
-    (etymologyOrigin !== undefined && typeof etymologyOrigin !== 'string')
+    (etymologyOrigin !== undefined && typeof etymologyOrigin !== 'string') ||
+    word.trim().length > LIMITS.short ||
+    translation.trim().length > LIMITS.short ||
+    phonetic.trim().length > LIMITS.short ||
+    historicalContext.trim().length > LIMITS.long ||
+    (typeof etymologyOrigin === 'string' && etymologyOrigin.trim().length > LIMITS.short)
   ) return null;
   return {
     gradeLevel,
@@ -52,8 +58,10 @@ export function parseCreateActivityTaskRequest(value: unknown): CreateActivityTa
     (type !== 'ACTIVITY' && type !== 'PERFORMANCE_TASK') ||
     typeof title !== 'string' || !title.trim() ||
     typeof description !== 'string' || !description.trim() ||
-    typeof totalPoints !== 'number' || !Number.isFinite(totalPoints) || totalPoints <= 0 ||
-    typeof dueDate !== 'string' || !Number.isFinite(Date.parse(dueDate))
+    typeof totalPoints !== 'number' || !Number.isInteger(totalPoints) || totalPoints <= 0 || totalPoints > LIMITS.points ||
+    typeof dueDate !== 'string' || !Number.isFinite(Date.parse(dueDate)) ||
+    title.trim().length > LIMITS.short ||
+    description.trim().length > LIMITS.long
   ) return null;
   return { gradeLevel, type, title: title.trim(), description: description.trim(), totalPoints, dueDate };
 }

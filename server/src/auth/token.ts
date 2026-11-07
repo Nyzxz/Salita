@@ -5,6 +5,8 @@ export interface TokenPayload {
   sub: string;
   role: UserRole;
   exp: number;
+  /** Issued-at (seconds). Lets a password change invalidate older tokens. */
+  iat?: number;
 }
 
 export const TOKEN_TTL_SECONDS = 60 * 60 * 8;
@@ -58,7 +60,12 @@ export function verifyToken(token: string): TokenPayload | null {
       return null;
     }
     if (payload.exp * 1000 <= Date.now()) return null;
-    return { sub: payload.sub, role: payload.role, exp: payload.exp };
+    return {
+      sub: payload.sub,
+      role: payload.role,
+      exp: payload.exp,
+      ...(typeof payload.iat === 'number' ? { iat: payload.iat } : {}),
+    };
   } catch {
     return null;
   }

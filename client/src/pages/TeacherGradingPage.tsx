@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import type { ActivityTask, QuizAttemptRecord, SubmissionRecord, TaskType } from '@shared/types';
 import { ErrorState } from '../components/common/ErrorState';
 import { LoadingState } from '../components/common/LoadingState';
@@ -6,6 +6,7 @@ import { DashboardShell } from '../components/layout/DashboardShell';
 import { BackLink } from '../components/layout/BackLink';
 import { Avatar } from '../components/common/Avatar';
 import { ChartIcon, ChevronRightIcon, ClipboardCheckIcon, QuizIcon, TargetIcon } from '../components/common/icons';
+import { LIMITS } from '../lib/limits';
 import { EmptyState } from '../components/ui/EmptyState';
 import { useAuth } from '../auth/AuthContext';
 import { fetchAllSubmissions, fetchTasks, gradeSubmission } from '../api/tasks';
@@ -31,6 +32,7 @@ export function TeacherGradingPage() {
   const [savingId, setSavingId] = useState<string | null>(null);
   const [expandedSubmissionId, setExpandedSubmissionId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<GradingTab>('activities');
+  const submissionsRef = useRef<SubmissionRecord[]>([]);
 
   const taskLookup = useMemo(
     () => new Map(tasks.map((task) => [task.id, task])),
@@ -47,7 +49,7 @@ export function TeacherGradingPage() {
     const safeToken = token;
     let active = true;
 
-    async function load() {
+    async function load(isRefresh: boolean) {
       try {
         const [taskList, submissionList, quizResultList] = await Promise.all([
           fetchTasks(safeToken),
@@ -56,25 +58,29 @@ export function TeacherGradingPage() {
         ]);
 
         if (!active) return;
-
+        const previous = new Map(submissionsRef.current.map((item) => [item.id, item]));
+        submissionsRef.current = submissionList;
         setTasks(taskList);
         setSubmissions(submissionList);
         setQuizAttempts(quizResultList);
-        setDrafts(
-          Object.fromEntries(
-            submissionList.map((submission) => [
-              submission.id,
-              {
-                grade: submission.grade?.toString() ?? '',
-                feedback: submission.feedback ?? '',
-              },
-            ]),
-          ),
-        );
+        setDrafts((current) => {
+          const next: DraftState = {};
+          for (const submission of submissionList) {
+            const before = previous.get(submission.id);
+            // Keep what the teacher is typing, unless the student has submitted again since.
+            const unchanged = before && before.submittedAt === submission.submittedAt && before.status === submission.status;
+            next[submission.id] =
+              isRefresh && unchanged && current[submission.id]
+                ? current[submission.id]
+                : { grade: submission.grade?.toString() ?? '', feedback: submission.feedback ?? '' };
+          }
+          return next;
+        });
         setError(null);
       } catch (err) {
         if (!active) return;
-        setError(err instanceof Error ? err.message : 'Could not load submissions.');
+        // A failed background refresh keeps showing what we have; only the first load reports an error.
+        if (!isRefresh) setError(err instanceof Error ? err.message : 'Could not load submissions.');
       } finally {
         if (active) {
           setIsLoading(false);
@@ -82,10 +88,19 @@ export function TeacherGradingPage() {
       }
     }
 
-    void load();
+    void load(false);
+
+    // Refresh every 10 seconds while the tab is visible, so new and resubmitted work shows up.
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === 'visible') void load(true);
+    };
+    const interval = window.setInterval(refreshWhenVisible, 10_000);
+    document.addEventListener('visibilitychange', refreshWhenVisible);
 
     return () => {
       active = false;
+      window.clearInterval(interval);
+      document.removeEventListener('visibilitychange', refreshWhenVisible);
     };
   }, [session?.token]);
 
@@ -230,6 +245,7 @@ export function TeacherGradingPage() {
                               <span className={submission.status === 'GRADED' ? 'badge-leaf mt-1' : 'badge-gold mt-1'}>
                                 {submission.status === 'GRADED' ? 'Graded' : 'Needs grading'}
                               </span>
+                              {submission.resubmitted && <span className="badge-clay ml-1.5 mt-1">Resubmitted</span>}
                             </div>
                           </div>
                         </td>
@@ -271,6 +287,7 @@ export function TeacherGradingPage() {
                               handleDraftChange(submission.id, 'feedback', event.target.value)
                             }
                             rows={2}
+                            maxLength={LIMITS.feedback}
                             aria-label={`Feedback for ${submission.studentName}`}
                             placeholder="Leave feedback for the student"
                             className="field min-w-[220px]"

@@ -7,6 +7,7 @@ import { createActivityTask, createLecture } from '../../api/content';
 import { DashboardShell } from '../../components/layout/DashboardShell';
 import { BackLink } from '../../components/layout/BackLink';
 import { BookIcon, ChartIcon, PlusIcon, QuizIcon, TargetIcon, TrashIcon } from '../../components/common/icons';
+import { LIMITS } from '../../lib/limits';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { GradeSelect } from '../../components/ui/GradeSelect';
 import { Notice } from '../../components/ui/Notice';
@@ -181,12 +182,12 @@ export function ContentStudioPage() {
                       )}
                     </div>
                     <Field label="Prompt">
-                      <input required value={question.questionText} onChange={(event) => updateQuestion(questionIndex, { questionText: event.target.value })} className="field" />
+                      <input maxLength={LIMITS.question} required value={question.questionText} onChange={(event) => updateQuestion(questionIndex, { questionText: event.target.value })} className="field" />
                     </Field>
                     <div className="grid gap-3 sm:grid-cols-2">
                       {question.options.map((option, optionIndex) => (
                         <Field key={optionIndex} label={`Option ${String.fromCharCode(65 + optionIndex)}${question.correctAnswerIndex === optionIndex ? ' · correct' : ''}`}>
-                          <input required value={option} onChange={(event) => updateOption(questionIndex, optionIndex, event.target.value)} className="field" />
+                          <input required maxLength={LIMITS.option} value={option} onChange={(event) => updateOption(questionIndex, optionIndex, event.target.value)} className="field" />
                         </Field>
                       ))}
                     </div>
@@ -210,7 +211,8 @@ export function ContentStudioPage() {
                     <PlusIcon className="h-4 w-4" />
                     Add question
                   </button>
-                  <button type="submit" disabled={isSaving} className="btn-primary">{isSaving ? 'Publishing…' : 'Publish quiz'}</button>
+                  <button type="submit" disabled={isSaving || gradeLevel === ''} className="btn-primary">{isSaving ? 'Publishing…' : 'Publish quiz'}</button>
+                  {gradeLevel === '' && <p className="self-center text-xs text-muted">Choose a grade level to publish.</p>}
                 </div>
               </form>
             </section>
@@ -284,16 +286,17 @@ function LectureBuilder({ token }: { token: string }) {
       <FormHeading id="lecture-heading" title="Write a lecture" description="Add a word with its pronunciation and the story behind it." />
       <form onSubmit={(event) => void submit(event)} className="surface mt-5 grid gap-5 p-6 sm:grid-cols-2 sm:p-7">
         <GradeSelect value={gradeLevel} onChange={setGradeLevel} className="sm:col-span-2" />
-        <Field label="Word or phrase"><input required value={word} onChange={(event) => setWord(event.target.value)} className="field" /></Field>
-        <Field label="English translation"><input required value={translation} onChange={(event) => setTranslation(event.target.value)} className="field" /></Field>
-        <Field label="Phonetic guide"><input required value={phonetic} onChange={(event) => setPhonetic(event.target.value)} className="field" /></Field>
+        <Field label="Word or phrase"><input maxLength={LIMITS.short} required value={word} onChange={(event) => setWord(event.target.value)} className="field" /></Field>
+        <Field label="English translation"><input maxLength={LIMITS.short} required value={translation} onChange={(event) => setTranslation(event.target.value)} className="field" /></Field>
+        <Field label="Phonetic guide"><input maxLength={LIMITS.short} required value={phonetic} onChange={(event) => setPhonetic(event.target.value)} className="field" /></Field>
         <Field label="Category"><select value={category} onChange={(event) => setCategory(event.target.value as Category)} className="field">{VALID_CATEGORIES.map((item) => <option key={item} value={item}>{item[0].toUpperCase() + item.slice(1)}</option>)}</select></Field>
-        <Field label="Historical & cultural etymology note" className="sm:col-span-2"><textarea required rows={4} value={historicalContext} onChange={(event) => setHistoricalContext(event.target.value)} className="field" /></Field>
-        <Field label="Origin tag" className="sm:col-span-2"><input value={etymologyOrigin} onChange={(event) => setEtymologyOrigin(event.target.value)} className="field" placeholder="Optional, e.g. Sanskrit" /></Field>
+        <Field label="Historical & cultural etymology note" className="sm:col-span-2"><textarea maxLength={LIMITS.long} required rows={4} value={historicalContext} onChange={(event) => setHistoricalContext(event.target.value)} className="field" /></Field>
+        <Field label="Origin tag" className="sm:col-span-2"><input maxLength={LIMITS.short} value={etymologyOrigin} onChange={(event) => setEtymologyOrigin(event.target.value)} className="field" placeholder="Optional, e.g. Sanskrit" /></Field>
         {error && <Notice tone="error" className="sm:col-span-2">{error}</Notice>}
         {notice && <Notice tone="success" className="sm:col-span-2">{notice}</Notice>}
         <div className="sm:col-span-2">
-          <button type="submit" disabled={isSaving} className="btn-primary">{isSaving ? 'Publishing…' : 'Publish lecture'}</button>
+          <button type="submit" disabled={isSaving || gradeLevel === ''} className="btn-primary">{isSaving ? 'Publishing…' : 'Publish lecture'}</button>
+          {gradeLevel === '' && <span className="ml-3 text-xs text-muted">Choose a grade level to publish.</span>}
         </div>
       </form>
     </section>
@@ -330,16 +333,17 @@ function ActivityTaskBuilder({ token }: { token: string }) {
     <section className="max-w-3xl" aria-labelledby="task-heading">
       <FormHeading id="task-heading" title="Set an activity or performance task" description="Students can submit written responses, and you grade them in the Grading center." />
       <form onSubmit={(event) => void submit(event)} className="surface mt-5 grid gap-5 p-6 sm:grid-cols-2 sm:p-7">
-        <Field label="Task title" className="sm:col-span-2"><input required value={title} onChange={(event) => setTitle(event.target.value)} className="field" /></Field>
+        <Field label="Task title" className="sm:col-span-2"><input maxLength={LIMITS.short} required value={title} onChange={(event) => setTitle(event.target.value)} className="field" /></Field>
         <Field label="Type"><select value={type} onChange={(event) => setType(event.target.value as TaskType)} className="field"><option value="ACTIVITY">Activity</option><option value="PERFORMANCE_TASK">Performance task</option></select></Field>
         <GradeSelect value={gradeLevel} onChange={setGradeLevel} className="sm:col-span-2" />
         <Field label="Total points"><input type="number" min={1} step={1} required value={totalPoints} onChange={(event) => setTotalPoints(Number(event.target.value))} className="field" /></Field>
-        <Field label="Detailed instructions / prompt" className="sm:col-span-2"><textarea required rows={5} value={description} onChange={(event) => setDescription(event.target.value)} className="field" /></Field>
+        <Field label="Detailed instructions / prompt" className="sm:col-span-2"><textarea maxLength={LIMITS.long} required rows={5} value={description} onChange={(event) => setDescription(event.target.value)} className="field" /></Field>
         <Field label="Due date"><input type="datetime-local" required value={dueDate} onChange={(event) => setDueDate(event.target.value)} className="field" /></Field>
         {error && <Notice tone="error" className="sm:col-span-2">{error}</Notice>}
         {notice && <Notice tone="success" className="sm:col-span-2">{notice}</Notice>}
         <div className="sm:col-span-2">
-          <button type="submit" disabled={isSaving} className="btn-primary">{isSaving ? 'Publishing…' : 'Publish task'}</button>
+          <button type="submit" disabled={isSaving || gradeLevel === ''} className="btn-primary">{isSaving ? 'Publishing…' : 'Publish task'}</button>
+          {gradeLevel === '' && <span className="ml-3 text-xs text-muted">Choose a grade level to publish.</span>}
         </div>
       </form>
     </section>

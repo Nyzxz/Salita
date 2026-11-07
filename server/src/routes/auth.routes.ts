@@ -8,6 +8,7 @@ import {
   parseUpdateProfileRequest,
   updateProfile,
 } from '../auth/auth.service.js';
+import { clientIpFrom } from '../auth/ipThrottle.js';
 import { loginOutcomeToHttp } from '../auth/loginOutcome.js';
 import { ApiError } from '../middleware/errorHandler.js';
 import { requireAuthAllowingPasswordChange } from '../middleware/requireAuth.js';
@@ -21,7 +22,9 @@ authRouter.post('/login', async (req, res, next) => {
       throw new ApiError(400, 'Enter your username and password, and choose a role.');
     }
 
-    const { status, body } = loginOutcomeToHttp(await login(request));
+    const ip = clientIpFrom(req.headers, req.ip);
+    const { status, body, retryAfterSeconds } = loginOutcomeToHttp(await login(request, ip));
+    if (retryAfterSeconds) res.setHeader('Retry-After', String(retryAfterSeconds));
     res.status(status).json(body);
   } catch (err) {
     next(err);

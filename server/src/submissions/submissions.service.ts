@@ -7,6 +7,8 @@ import type {
 import mongoose from 'mongoose';
 import { connectDB } from '../config/db.js';
 import { findActivityTask } from '../content/content.service.js';
+import { matchesGrade } from '../grades.js';
+import { LIMITS } from '../limits.js';
 import { Submission, type SubmissionDocument } from '../models/Submission.js';
 
 export type ServiceResult<T> = { ok: true; data: T } | { ok: false; status: number; error: string };
@@ -22,6 +24,7 @@ function toSubmissionRecord(record: SubmissionDocument): SubmissionRecord {
     ...(record.grade !== undefined ? { grade: record.grade } : {}),
     ...(record.feedback !== undefined ? { feedback: record.feedback } : {}),
     status: record.status,
+    ...(record.resubmittedAfterGrade ? { resubmitted: true } : {}),
   };
 }
 
@@ -31,7 +34,7 @@ export function parseCreateSubmissionRequest(body: unknown): CreateSubmissionReq
   const { taskId, content } = body as Record<string, unknown>;
   if (typeof taskId !== 'string' || typeof content !== 'string') return null;
   const trimmedContent = content.trim();
-  if (taskId.length === 0 || trimmedContent.length === 0) return null;
+  if (taskId.length === 0 || trimmedContent.length === 0 || trimmedContent.length > LIMITS.submission) return null;
   return { taskId, content: trimmedContent };
 }
 
@@ -44,25 +47,47 @@ export async function submitWork(
     return { ok: false, status: 404, error: `No activity or task found with id "${request.taskId}".` };
   }
 
+  if (!matchesGrade(task.gradeLevel, user.section)) {
+    return { ok: false, status: 403, error: 'This task is not assigned to your grade level.' };
+  }
+
   if (!mongoose.isValidObjectId(user.id)) {
     return { ok: false, status: 401, error: 'Your account session is invalid. Please sign in again.' };
   }
 
   await connectDB();
-  const record = await Submission.findOneAndUpdate(
-    { taskId: request.taskId, studentId: user.id },
-    {
-      $set: {
-        studentName: user.name,
-        submittedContent: request.content,
-        submittedAt: new Date(),
-        status: 'PENDING',
+  const previous = await Submission.findOne({ taskId: request.taskId, studentId: user.id });
+  // Resubmitting graded work clears the grade; flag it so the teacher notices it needs re-grading.
+  const resubmittedAfterGrade = previous ? previous.status === 'GRADED' || previous.resubmittedAfterGrade === true : false;
+
+  const upsert = () =>
+    Submission.findOneAndUpdate(
+      { taskId: request.taskId, studentId: user.id },
+      {
+        $set: {
+          studentName: user.name,
+          submittedContent: request.content,
+          submittedAt: new Date(),
+          status: 'PENDING',
+          resubmittedAfterGrade,
+        },
+        $unset: { grade: 1, feedback: 1 },
+        $setOnInsert: { taskId: request.taskId, studentId: user.id },
       },
-      $unset: { grade: 1, feedback: 1 },
-      $setOnInsert: { taskId: request.taskId, studentId: user.id },
-    },
-    { new: true, upsert: true, runValidators: true, setDefaultsOnInsert: true },
-  );
+      { new: true, upsert: true, runValidators: true, setDefaultsOnInsert: true },
+    );
+
+  let record;
+  try {
+    record = await upsert();
+  } catch (error) {
+    // Two concurrent first submissions can collide on the unique (task, student) index; the retry becomes an update.
+    if (typeof error === 'object' && error !== null && 'code' in error && error.code === 11000) {
+      record = await upsert();
+    } else {
+      throw error;
+    }
+  }
 
   return { ok: true, data: toSubmissionRecord(record) };
 }
@@ -84,6 +109,7 @@ export function parseGradeSubmissionRequest(body: unknown): GradeSubmissionReque
   const { grade, feedback } = body as Record<string, unknown>;
   if (typeof grade !== 'number' || !Number.isFinite(grade)) return null;
   const trimmedFeedback = typeof feedback === 'string' ? feedback.trim() : undefined;
+  if (trimmedFeedback !== undefined && trimmedFeedback.length > LIMITS.feedback) return null;
   return { grade, feedback: trimmedFeedback && trimmedFeedback.length > 0 ? trimmedFeedback : undefined };
 }
 
@@ -121,6 +147,7 @@ export async function gradeSubmission(
   submission.grade = request.grade;
   submission.feedback = request.feedback?.trim() || undefined;
   submission.status = 'GRADED';
+  submission.resubmittedAfterGrade = false;
   await submission.save();
   return { ok: true, data: toSubmissionRecord(submission) };
 }

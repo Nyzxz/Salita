@@ -1,6 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import type { ApiResponse } from '../../../shared/src/types.js';
 import { login, parseLoginRequest } from '../../../server/src/auth/auth.service.js';
+import { clientIpFrom } from '../../../server/src/auth/ipThrottle.js';
 import { loginOutcomeToHttp } from '../../../server/src/auth/loginOutcome.js';
 
 export default async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
@@ -21,6 +22,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
     return;
   }
 
-  const { status, body } = loginOutcomeToHttp(await login(request));
+  const ip = clientIpFrom(req.headers, undefined);
+  const { status, body, retryAfterSeconds } = loginOutcomeToHttp(await login(request, ip));
+  if (retryAfterSeconds) res.setHeader('Retry-After', String(retryAfterSeconds));
   res.status(status).json(body);
 }

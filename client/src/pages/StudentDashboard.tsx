@@ -16,7 +16,11 @@ export function StudentDashboard() {
   const { session, logout } = useAuth();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<StudentTab>('lectures');
-  const learning = useTasksAndSubmissions(session?.token ?? '');
+  // Only poll while a tab that shows tasks or grades is open.
+  const learning = useTasksAndSubmissions(
+    session?.token ?? '',
+    activeTab === 'activities' || activeTab === 'performance' || activeTab === 'grades',
+  );
 
   const handleSignOut = () => {
     logout();

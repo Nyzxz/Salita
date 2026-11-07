@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { ActivityTask, SubmissionRecord } from '@shared/types';
 import { ClockIcon, TargetIcon } from '../common/icons';
+import { LIMITS } from '../../lib/limits';
 import { Notice } from '../ui/Notice';
 import { gradeLabel } from '../ui/GradeSelect';
 
@@ -73,6 +74,7 @@ export function TaskCard({ task, submission, onSubmit }: TaskCardProps) {
           value={content}
           onChange={(event) => setContent(event.target.value)}
           rows={4}
+          maxLength={LIMITS.submission}
           className="field"
           placeholder="Write your response here…"
         />

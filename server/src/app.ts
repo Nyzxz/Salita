@@ -12,6 +12,7 @@ import { quizRouter } from './routes/quiz.routes.js';
 import { quizzesRouter } from './routes/quizzes.routes.js';
 import { contentRouter } from './routes/content.routes.js';
 import { wordsRouter } from './routes/words.routes.js';
+import { requireAuth } from './middleware/requireAuth.js';
 
 export function createApp(): Express {
   const app = express();
@@ -63,9 +64,9 @@ export function createApp(): Express {
   });
 
   app.use('/api/auth', authRouter);
-  app.use('/api/words', wordsRouter);
-  app.use('/api/milestones', milestonesRouter);
-  app.use('/api/quiz', quizRouter);
+  app.use('/api/words', requireAuth(), wordsRouter);
+  app.use('/api/milestones', requireAuth(), milestonesRouter);
+  app.use('/api/quiz', requireAuth(), quizRouter);
   app.use('/api/quizzes', quizzesRouter);
   app.use('/api/content', contentRouter);
   app.use('/api/admin', adminRouter);

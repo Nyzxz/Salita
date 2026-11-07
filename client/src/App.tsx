@@ -8,6 +8,7 @@ import { TeacherGradingPage } from './pages/TeacherGradingPage';
 import { UserManagementPage } from './pages/admin/UserManagementPage';
 import { ContentStudioPage } from './pages/admin/ContentStudioPage';
 import { ChangePasswordPage } from './pages/ChangePasswordPage';
+import { NotFoundPage } from './pages/NotFoundPage';
 
 export default function App() {
   return (
@@ -57,7 +58,7 @@ export default function App() {
               </ProtectedRoute>
             }
           />
-          <Route path="*" element={<Navigate to="/login" replace />} />
+          <Route path="*" element={<NotFoundPage />} />
         </Routes>
       </AuthProvider>
     </BrowserRouter>

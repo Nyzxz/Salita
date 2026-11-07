@@ -2,6 +2,7 @@ import type {
   CreateQuizRequest,
   QuizAttemptRecord,
   QuizContent,
+  QuizStartRecord,
   SubmitQuizAttemptRequest,
 } from '@shared/types';
 import { apiGet, apiPost } from './client';
@@ -12,6 +13,10 @@ export function fetchQuizzes(token: string): Promise<QuizContent[]> {
 
 export function createQuiz(request: CreateQuizRequest, token: string): Promise<QuizContent> {
   return apiPost<QuizContent>('/api/quizzes', request, token);
+}
+
+export function startQuiz(quizId: string, token: string): Promise<QuizStartRecord> {
+  return apiPost<QuizStartRecord>(`/api/quizzes/${encodeURIComponent(quizId)}/start`, {}, token);
 }
 
 export function submitQuizAttempt(

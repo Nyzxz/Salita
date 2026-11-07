@@ -1,9 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { QuizAttemptRecord, QuizContent } from '@shared/types';
 import { useAuth } from '../../auth/AuthContext';
 import {
   fetchMyQuizAttempts,
   fetchQuizzes,
+  startQuiz,
   submitQuizAttempt,
 } from '../../api/quizzes';
 import { ApiRequestError } from '../../api/client';
@@ -26,6 +27,12 @@ export function AssignedQuizzes() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isStarting, setIsStarting] = useState(false);
+  /** Server-decided closing time (ms since epoch) for a timed quiz. */
+  const [deadline, setDeadline] = useState<number | null>(null);
+  const [secondsLeft, setSecondsLeft] = useState<number | null>(null);
+  const answersRef = useRef<number[]>([]);
+  answersRef.current = answers;
 
   useEffect(() => {
     let active = true;
@@ -46,26 +53,64 @@ export function AssignedQuizzes() {
     };
   }, [token]);
 
-  const beginQuiz = (quiz: QuizContent) => {
-    setSelectedQuiz(quiz);
-    setAnswers(Array(quiz.questions.length).fill(-1) as number[]);
-    setLatestAttempt(null);
-  };
-
-  const handleSubmit = async () => {
-    if (!selectedQuiz || answers.some((answer) => answer < 0)) return;
-    setIsSubmitting(true);
+  const beginQuiz = async (quiz: QuizContent) => {
     setError(null);
+    setIsStarting(true);
     try {
-      const attempt = await submitQuizAttempt(selectedQuiz.id, { userAnswers: answers }, token);
-      setLatestAttempt(attempt);
-      setAttempts((current) => [attempt, ...current]);
+      // Tells the server the quiz is open; for timed quizzes this starts its clock.
+      const started = await startQuiz(quiz.id, token);
+      setDeadline(started.expiresAt ? new Date(started.expiresAt).getTime() : null);
+      setSelectedQuiz(quiz);
+      setAnswers(Array(quiz.questions.length).fill(-1) as number[]);
+      setLatestAttempt(null);
     } catch (cause) {
-      setError(cause instanceof ApiRequestError ? cause.message : 'Could not submit this quiz.');
+      setError(cause instanceof ApiRequestError ? cause.message : 'Could not start this quiz.');
     } finally {
-      setIsSubmitting(false);
+      setIsStarting(false);
     }
   };
+
+  /** `force` is used when time runs out: unanswered questions are sent as blank (scored wrong). */
+  const handleSubmit = useCallback(
+    async (force = false) => {
+      const current = answersRef.current;
+      if (!selectedQuiz || (!force && current.some((answer) => answer < 0))) return;
+      setIsSubmitting(true);
+      setError(null);
+      try {
+        const attempt = await submitQuizAttempt(selectedQuiz.id, { userAnswers: current }, token);
+        setLatestAttempt(attempt);
+        setAttempts((previous) => [attempt, ...previous]);
+        setDeadline(null);
+      } catch (cause) {
+        setError(cause instanceof ApiRequestError ? cause.message : 'Could not submit this quiz.');
+      } finally {
+        setIsSubmitting(false);
+      }
+    },
+    [selectedQuiz, token],
+  );
+
+  // Countdown for timed quizzes. The server enforces the limit; this just keeps the student informed
+  // and submits what they have when time runs out.
+  useEffect(() => {
+    if (deadline === null || !selectedQuiz || latestAttempt) {
+      setSecondsLeft(null);
+      return;
+    }
+    let submitted = false;
+    const tick = () => {
+      const left = Math.max(0, Math.ceil((deadline - Date.now()) / 1000));
+      setSecondsLeft(left);
+      if (left === 0 && !submitted) {
+        submitted = true;
+        void handleSubmit(true);
+      }
+    };
+    tick();
+    const interval = window.setInterval(tick, 1000);
+    return () => window.clearInterval(interval);
+  }, [deadline, selectedQuiz, latestAttempt, handleSubmit]);
 
   if (isLoading) return <LoadingState label="Loading teacher quizzes…" />;
   if (error && quizzes.length === 0) return <ErrorState message={error} />;
@@ -84,14 +129,23 @@ export function AssignedQuizzes() {
       {selectedQuiz && !latestAttempt ? (
         <div className="surface flex animate-fade-in flex-col gap-7 p-6 sm:p-8">
           <div>
-            <button type="button" onClick={() => setSelectedQuiz(null)} className="btn-ghost btn-sm -ml-3 mb-3">
+            <button type="button" onClick={() => { setSelectedQuiz(null); setDeadline(null); }} className="btn-ghost btn-sm -ml-3 mb-3">
               <ArrowLeftIcon className="h-3.5 w-3.5" />
               Back to quizzes
             </button>
             <h3 className="text-2xl font-semibold text-parchment">{selectedQuiz.title}</h3>
             <p className="mt-2 text-sm text-muted">{selectedQuiz.description}</p>
             {selectedQuiz.timeLimitMinutes && (
-              <p className="badge-neutral mt-3"><ClockIcon className="h-3 w-3" />{selectedQuiz.timeLimitMinutes} minute limit</p>
+              <p
+                role="timer"
+                aria-live="off"
+                className={`mt-3 ${secondsLeft !== null && secondsLeft <= 60 ? 'badge-clay' : 'badge-neutral'}`}
+              >
+                <ClockIcon className="h-3 w-3" />
+                {secondsLeft === null
+                  ? `${selectedQuiz.timeLimitMinutes} minute limit`
+                  : `${Math.floor(secondsLeft / 60)}:${String(secondsLeft % 60).padStart(2, '0')} left`}
+              </p>
             )}
           </div>
 
@@ -166,7 +220,7 @@ export function AssignedQuizzes() {
                   {quiz.timeLimitMinutes ? <span className="badge-neutral"><ClockIcon className="h-3 w-3" />{quiz.timeLimitMinutes} min</span> : null}
                   {previous ? <span className="badge-leaf">Last score {previous.percentageScore}%</span> : null}
                 </div>
-                <button type="button" onClick={() => beginQuiz(quiz)} className="btn-primary btn-sm mt-5 self-start">
+                <button type="button" onClick={() => void beginQuiz(quiz)} disabled={isStarting} className="btn-primary btn-sm mt-5 self-start">
                   {previous ? 'Retake quiz' : 'Start quiz'}
                   <ArrowRightIcon className="h-3.5 w-3.5" />
                 </button>

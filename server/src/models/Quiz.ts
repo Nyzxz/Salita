@@ -19,7 +19,7 @@ export interface IQuiz extends Document {
 
 const questionSchema = new Schema<IQuestion>(
   {
-    questionText: { type: String, required: true, trim: true },
+    questionText: { type: String, required: true, trim: true, maxlength: 500 },
     options: { type: [String], required: true, validate: (values: string[]) => values.length === 4 },
     correctAnswerIndex: { type: Number, required: true, min: 0, max: 3 },
     points: { type: Number, required: true, min: 1 },

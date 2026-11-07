@@ -1,4 +1,5 @@
 import { timingSafeEqual } from 'node:crypto';
+import bcrypt from 'bcryptjs';
 import type {
   AuthSession,
   ChangePasswordRequest,
@@ -12,6 +13,7 @@ import { findStudentByUsername } from '../data/students.store.js';
 import { connectDB } from '../config/db.js';
 import { User as UserModel, type UserDocument } from '../models/User.js';
 import { checkLockout, clearedState, recordFailedAttempt } from './loginAttempts.js';
+import { recordIpFailure, throttleSecondsLeft } from './ipThrottle.js';
 import { TOKEN_TTL_SECONDS, createToken, verifyToken } from './token.js';
 
 /**
@@ -58,7 +60,7 @@ function buildSession(record: UserDocument): AuthSession {
   const exp = Math.floor(Date.now() / 1000) + TOKEN_TTL_SECONDS;
   return {
     user,
-    token: createToken({ sub: user.id, role: user.role, exp }),
+    token: createToken({ sub: user.id, role: user.role, exp, iat: Math.floor(Date.now() / 1000) }),
     expiresAt: new Date(exp * 1000).toISOString(),
   };
 }
@@ -96,17 +98,39 @@ async function migrateLegacyUser(request: LoginRequest): Promise<UserDocument | 
 
 export type LoginOutcome =
   | { status: 'success'; session: AuthSession }
+  /** Every credential problem looks the same: unknown user, wrong role, deactivated, wrong password, or locked. */
   | { status: 'invalid_credentials' }
-  | { status: 'invalid_password'; attemptsRemaining: number }
-  | { status: 'locked'; retryAfterSeconds: number };
+  /** Too many failures from one network address. Says nothing about any account. */
+  | { status: 'rate_limited'; retryAfterSeconds: number };
+
+let dummyHash: Promise<string> | null = null;
+
+/** Burns the same bcrypt time as a real check, so response time doesn't reveal whether a username exists. */
+async function burnPasswordCheck(password: string): Promise<void> {
+  dummyHash ??= bcrypt.hash('salita-timing-equalizer', 12);
+  await bcrypt.compare(password, await dummyHash);
+}
 
 /**
- * Signs a user in. Unknown username, wrong role, and deactivated accounts all
- * return the same generic `invalid_credentials` (and are not tracked), so the
- * lockout can't be used to discover which usernames exist.
+ * Signs a user in.
+ *
+ * Unknown username, wrong role, deactivated account, wrong password and a
+ * locked account all produce the identical `invalid_credentials` outcome and
+ * take about the same time, so neither the message nor the timing reveals which
+ * usernames exist. The 3-attempt account lockout still applies silently;
+ * `ipThrottle` adds a per-network limit so one person can't lock many accounts.
  */
-export async function login(request: LoginRequest): Promise<LoginOutcome> {
+export async function login(request: LoginRequest, clientIp?: string): Promise<LoginOutcome> {
   await connectDB();
+
+  const retryAfterSeconds = await throttleSecondsLeft(clientIp);
+  if (retryAfterSeconds > 0) return { status: 'rate_limited', retryAfterSeconds };
+
+  const fail = async (): Promise<LoginOutcome> => {
+    await recordIpFailure(clientIp);
+    return { status: 'invalid_credentials' };
+  };
+
   const username = request.username.trim().toLowerCase();
   let record: UserDocument | null = await UserModel.findOne({ username });
 
@@ -120,21 +144,22 @@ export async function login(request: LoginRequest): Promise<LoginOutcome> {
   }
 
   if (!record || record.role !== request.role || record.status === 'INACTIVE') {
-    return { status: 'invalid_credentials' };
+    await burnPasswordCheck(request.password);
+    return fail();
   }
 
   const now = Date.now();
-  const lock = checkLockout(record, now);
-  if (lock.status === 'locked') return lock;
+  if (checkLockout(record, now).status === 'locked') {
+    await burnPasswordCheck(request.password);
+    return fail();
+  }
 
   if (!(await record.comparePassword(request.password))) {
     const failure = recordFailedAttempt(record, now);
     record.failedLoginAttempts = failure.nextState.failedLoginAttempts;
     record.lockedUntil = failure.nextState.lockedUntil ?? null;
     await record.save();
-    return failure.status === 'locked'
-      ? { status: 'locked', retryAfterSeconds: failure.retryAfterSeconds }
-      : { status: 'invalid_password', attemptsRemaining: failure.attemptsRemaining };
+    return fail();
   }
 
   if (record.failedLoginAttempts !== 0 || record.lockedUntil) {
@@ -166,6 +191,8 @@ export async function getUserFromAuthHeader(
     const record = await UserModel.findById(payload.sub);
     if (!record || record.role !== payload.role || record.status === 'INACTIVE') return null;
     if (record.mustChangePassword && !options.allowPasswordChange) return null;
+    // A password change/reset invalidates every token issued before it.
+    if (record.passwordChangedAt && (payload.iat ?? 0) < Math.floor(record.passwordChangedAt.getTime() / 1000)) return null;
     return toPublicUser(record);
   } catch {
     return null;
@@ -245,6 +272,7 @@ export async function changePassword(userId: string, request: ChangePasswordRequ
 
   record.password = request.newPassword;
   record.mustChangePassword = false;
+  record.passwordChangedAt = new Date();
   await record.save();
   return { ok: true, data: buildSession(record) };
 }

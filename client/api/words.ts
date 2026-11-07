@@ -1,12 +1,19 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import type { ApiResponse, Category, WordItem } from '../../shared/src/types.js';
+import { getUserFromAuthHeader } from '../../server/src/auth/auth.service.js';
 import { WORDS } from '../../server/src/data/words.data.js';
 
 // Mirrors shared/src/types.ts VALID_CATEGORIES — see server/src/routes/words.routes.ts
 // for why this is a local literal rather than a shared runtime import.
 const KNOWN_CATEGORIES: readonly Category[] = ['greetings', 'food', 'values', 'phrases'];
 
-export default function handler(req: VercelRequest, res: VercelResponse): void {
+export default async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
+  const user = await getUserFromAuthHeader(req.headers.authorization);
+  if (!user) {
+    res.status(401).json({ success: false, data: null, error: 'You need to sign in to do that.' });
+    return;
+  }
+
   const { category } = req.query;
 
   if (typeof category === 'string' && category.length > 0) {

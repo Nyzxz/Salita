@@ -155,6 +155,7 @@ export async function editStudent(
       record.password = patch.password;
       // A teacher-set password is a default again: force a change at next sign-in.
       record.mustChangePassword = true;
+      record.passwordChangedAt = new Date();
       record.failedLoginAttempts = 0;
       record.lockedUntil = null;
     }

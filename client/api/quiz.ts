@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import type { ApiResponse, QuizAttemptRecord, QuizContent, QuizQuestion, User } from '../../shared/src/types.js';
+import type { ApiResponse, QuizAttemptRecord, QuizContent, QuizQuestion, QuizStartRecord, User } from '../../shared/src/types.js';
 import { QUIZ_QUESTIONS } from '../../server/src/data/quiz.data.js';
 import { getUserFromAuthHeader } from '../../server/src/auth/auth.service.js';
 import {
@@ -9,6 +9,7 @@ import {
   listQuizzes,
   parseCreateQuizRequest,
   parseSubmitQuizAttemptRequest,
+  startQuiz,
   submitQuizAttempt,
 } from '../../server/src/quizzes/quizzes.service.js';
 
@@ -75,6 +76,22 @@ async function handleSavedQuizApi(req: VercelRequest, res: VercelResponse): Prom
     return;
   }
 
+  const startMatch = path.match(/^([^/]+)\/start$/);
+  if (startMatch && req.method === 'POST') {
+    if (user.role !== 'STUDENT') {
+      sendError(res, 403, 'Your account is not allowed to do that.');
+      return;
+    }
+    const started = await startQuiz(user, startMatch[1]);
+    if (!started.ok) {
+      sendError(res, started.status, started.error);
+      return;
+    }
+    const body: ApiResponse<QuizStartRecord> = { success: true, data: started.data };
+    res.status(200).json(body);
+    return;
+  }
+
   const submitMatch = path.match(/^([^/]+)\/submit$/);
   if (submitMatch && req.method === 'POST') {
     if (user.role !== 'STUDENT') {
@@ -86,12 +103,12 @@ async function handleSavedQuizApi(req: VercelRequest, res: VercelResponse): Prom
       sendError(res, 400, 'Submit one selected answer for each question.');
       return;
     }
-    const attempt = await submitQuizAttempt(user, submitMatch[1], request);
-    if (!attempt) {
-      sendError(res, 400, 'The quiz was not found or the answers do not match its questions.');
+    const result = await submitQuizAttempt(user, submitMatch[1], request);
+    if (!result.ok) {
+      sendError(res, result.status, result.error);
       return;
     }
-    const body: ApiResponse<QuizAttemptRecord> = { success: true, data: attempt };
+    const body: ApiResponse<QuizAttemptRecord> = { success: true, data: result.data };
     res.status(201).json(body);
     return;
   }
@@ -105,6 +122,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
     return;
   }
 
+  const practiceUser = await getUserFromAuthHeader(req.headers.authorization);
+  if (!practiceUser) {
+    sendError(res, 401, 'You need to sign in to do that.');
+    return;
+  }
   if (req.method !== 'GET') {
     res.setHeader('Allow', 'GET');
     sendError(res, 405, `Method ${req.method} not allowed.`);

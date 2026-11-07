@@ -16,6 +16,8 @@ export interface UserDocument extends Document {
   failedLoginAttempts: number;
   mustChangePassword: boolean;
   lockedUntil?: Date | null;
+  /** Tokens issued before this moment are rejected (set on every password change/reset). */
+  passwordChangedAt?: Date | null;
   comparePassword(candidatePassword: string): Promise<boolean>;
 }
 
@@ -31,6 +33,7 @@ const userSchema = new Schema<UserDocument>(
     failedLoginAttempts: { type: Number, default: 0, required: true },
     mustChangePassword: { type: Boolean, default: false, required: true },
     lockedUntil: { type: Date, default: null },
+    passwordChangedAt: { type: Date, default: null },
   },
   { timestamps: { createdAt: true, updatedAt: false } },
 );

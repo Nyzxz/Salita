@@ -9,6 +9,7 @@ export interface SubmissionDocument extends Document {
   grade?: number;
   feedback?: string;
   status: 'PENDING' | 'GRADED';
+  resubmittedAfterGrade?: boolean;
 }
 
 const submissionSchema = new Schema<SubmissionDocument>(
@@ -16,11 +17,12 @@ const submissionSchema = new Schema<SubmissionDocument>(
     taskId: { type: String, required: true, trim: true },
     studentId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
     studentName: { type: String, required: true, trim: true },
-    submittedContent: { type: String, required: true },
+    submittedContent: { type: String, required: true, maxlength: 10000 },
     submittedAt: { type: Date, default: Date.now, required: true },
     grade: { type: Number, min: 0 },
-    feedback: { type: String, trim: true },
+    feedback: { type: String, trim: true, maxlength: 2000 },
     status: { type: String, enum: ['PENDING', 'GRADED'], default: 'PENDING', required: true },
+    resubmittedAfterGrade: { type: Boolean, default: false },
   },
   { timestamps: true },
 );

@@ -117,6 +117,14 @@ export interface CreateQuizRequest {
   questions: Array<QuizContentQuestion & { correctAnswerIndex: number }>;
 }
 
+/** Response of POST /api/quizzes/:id/start — the server's clock decides when a timed quiz ends. */
+export interface QuizStartRecord {
+  quizId: string;
+  startedAt: string;
+  /** ISO time the quiz closes, or absent for an untimed quiz. */
+  expiresAt?: string;
+}
+
 export interface SubmitQuizAttemptRequest {
   userAnswers: number[];
 }
@@ -269,6 +277,8 @@ export interface ActivityTask {
 }
 
 export interface SubmissionRecord {
+  /** True when the student resubmitted after it was graded, so the old grade was cleared and needs a fresh look. */
+  resubmitted?: boolean;
   id: string;
   taskId: string;
   studentId: string;

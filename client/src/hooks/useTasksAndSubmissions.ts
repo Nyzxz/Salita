@@ -4,7 +4,8 @@ import { fetchMySubmissions, fetchTasks, submitTaskWork } from '../api/tasks';
 import { ApiRequestError } from '../api/client';
 
 /** Loads the student's work and refreshes it periodically while the page is open. */
-export function useTasksAndSubmissions(token: string) {
+/** `polling` should be true only while a tab that shows this data is open. */
+export function useTasksAndSubmissions(token: string, polling = true) {
   const [tasks, setTasks] = useState<ActivityTask[] | null>(null);
   const [submissions, setSubmissions] = useState<SubmissionRecord[] | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -31,6 +32,7 @@ export function useTasksAndSubmissions(token: string) {
     }
 
     void load();
+    if (!polling) return;
     const refreshWhenVisible = () => {
       if (document.visibilityState === 'visible') void load();
     };
@@ -40,7 +42,7 @@ export function useTasksAndSubmissions(token: string) {
       window.clearInterval(interval);
       document.removeEventListener('visibilitychange', refreshWhenVisible);
     };
-  }, [load]);
+  }, [load, polling]);
 
   const submit = useCallback(
     async (taskId: string, content: string) => {
