@@ -93,6 +93,8 @@ export interface QuizQuestion {
 }
 
 export interface QuizContentQuestion {
+  /** Only sent to teachers (so they can edit a quiz); students never receive it. */
+  correctAnswerIndex?: number;
   questionText: string;
   options: string[];
   points: number;
@@ -103,6 +105,12 @@ export interface QuizContent {
   title: string;
   description: string;
   timeLimitMinutes?: number;
+  /** ISO time after which the quiz can no longer be started or submitted. */
+  dueDate?: string;
+  /** Most attempts each student may make; absent means unlimited. */
+  maxAttempts?: number;
+  /** Whether students see the correct answers after submitting. */
+  showAnswers: boolean;
   gradeLevel: ContentGrade;
   questions: QuizContentQuestion[];
   createdBy: string;
@@ -114,7 +122,24 @@ export interface CreateQuizRequest {
   description: string;
   gradeLevel: ContentGrade;
   timeLimitMinutes?: number;
+  dueDate?: string;
+  maxAttempts?: number;
+  showAnswers?: boolean;
   questions: Array<QuizContentQuestion & { correctAnswerIndex: number }>;
+}
+
+/** Editing a quiz replaces its settings and questions. */
+export type UpdateQuizRequest = CreateQuizRequest;
+
+/** One question as a student sees it when reviewing a finished attempt. */
+export interface QuizReviewItem {
+  questionText: string;
+  options: string[];
+  correctAnswerIndex: number;
+  /** -1 when the student left it blank. */
+  userAnswer: number;
+  points: number;
+  earned: number;
 }
 
 /** Response of POST /api/quizzes/:id/start — the server's clock decides when a timed quiz ends. */
@@ -141,6 +166,8 @@ export interface QuizAttemptRecord {
   percentageScore: number;
   feedback: string;
   completedAt: string;
+  /** Per-question review; sent only to the student who took it, and only when the quiz allows it. */
+  review?: QuizReviewItem[];
 }
 
 export interface LectureRecord {
@@ -165,6 +192,9 @@ export interface CreateLectureRequest {
   etymologyOrigin?: string;
 }
 
+/** Editing a lecture replaces its fields. */
+export type UpdateLectureRequest = CreateLectureRequest;
+
 export interface CreateActivityTaskRequest {
   gradeLevel: ContentGrade;
   type: TaskType;
@@ -174,12 +204,24 @@ export interface CreateActivityTaskRequest {
   dueDate: string;
 }
 
+/** Editing an activity or task replaces its fields (the type cannot change). */
+export type UpdateActivityTaskRequest = Omit<CreateActivityTaskRequest, 'type'>;
+
 /** Uniform envelope returned by every API endpoint. */
 export interface ApiResponse<T> {
   success: boolean;
   data: T;
   /** Present only when `success` is false. */
   error?: string;
+  /** Present on paginated lists. */
+  meta?: PageMeta;
+}
+
+/** Describes one page of a paginated list. */
+export interface PageMeta {
+  total: number;
+  page: number;
+  limit: number;
 }
 
 export type UserRole = 'STUDENT' | 'TEACHER';
@@ -288,15 +330,108 @@ export interface SubmissionRecord {
   grade?: number;
   feedback?: string;
   status: 'PENDING' | 'GRADED';
+  /** True when the work arrived after the task's due date. */
+  late?: boolean;
+  attachment?: AttachmentInfo;
 }
 
 export interface GradeSubmissionRequest {
   grade: number;
   feedback?: string;
+  /** The `submittedAt` the teacher was looking at; if the student resubmitted since, saving is refused. */
+  expectedSubmittedAt?: string;
+}
+
+/** A file attached to a submission. The bytes are fetched separately. */
+export interface AttachmentInfo {
+  id: string;
+  fileName: string;
+  contentType: string;
+  size: number;
+}
+
+/** Body of POST /api/submissions?route=attachment. */
+export interface UploadAttachmentRequest {
+  taskId: string;
+  fileName: string;
+  contentType: string;
+  /** File bytes, base64-encoded. */
+  dataBase64: string;
+}
+
+export interface NotificationRecord {
+  id: string;
+  title: string;
+  body: string;
+  /** In-app route to open when clicked. */
+  link?: string;
+  createdAt: string;
+  read: boolean;
+}
+
+export interface NotificationFeed {
+  items: NotificationRecord[];
+  unreadCount: number;
+}
+
+/** One row of a CSV import. The server picks the default password. */
+export interface ImportStudentRow {
+  fullName: string;
+  username: string;
+  email: string;
+  section: GradeLevel;
+}
+
+export interface ImportStudentResult {
+  username: string;
+  status: 'created' | 'skipped';
+  /** Set when created: the default password to hand over. */
+  password?: string;
+  /** Set when skipped. */
+  reason?: string;
+}
+
+export interface QuizQuestionAnalytics {
+  questionText: string;
+  /** Share of attempts (0–100) that answered correctly. */
+  correctRate: number;
+  /** How many attempts chose each of the four options. */
+  optionCounts: number[];
+  correctAnswerIndex: number;
+  unanswered: number;
+}
+
+export interface QuizAnalyticsItem {
+  quizId: string;
+  title: string;
+  gradeLevel: string;
+  attempts: number;
+  students: number;
+  averagePercent: number;
+  highestPercent: number;
+  lowestPercent: number;
+  questions: QuizQuestionAnalytics[];
+}
+
+export interface StudentProgressItem {
+  studentId: string;
+  studentName: string;
+  section: string;
+  quizzesTaken: number;
+  quizAveragePercent: number | null;
+  tasksGraded: number;
+  taskAveragePercent: number | null;
+}
+
+export interface TeacherAnalytics {
+  quizzes: QuizAnalyticsItem[];
+  students: StudentProgressItem[];
 }
 
 /** Body of POST /api/submissions. */
 export interface CreateSubmissionRequest {
   taskId: string;
   content: string;
+  /** Id returned by uploading a file for this task; attaches it to the submission. */
+  attachmentId?: string;
 }

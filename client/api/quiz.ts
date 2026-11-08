@@ -1,10 +1,14 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import type { ApiResponse, QuizAttemptRecord, QuizContent, QuizQuestion, QuizStartRecord, User } from '../../shared/src/types.js';
+import type { ApiResponse, QuizAttemptRecord, QuizContent, QuizQuestion, QuizStartRecord, TeacherAnalytics, User } from '../../shared/src/types.js';
 import { QUIZ_QUESTIONS } from '../../server/src/data/quiz.data.js';
-import { getUserFromAuthHeader } from '../../server/src/auth/auth.service.js';
+import { parsePageRequest, queryString } from '../../server/src/pagination.js';
+import { getUserFromRequest } from '../../server/src/auth/auth.service.js';
 import {
   createQuiz,
+  deleteQuiz,
   getAllQuizAttempts,
+  getTeacherAnalytics,
+  updateQuiz,
   getStudentQuizAttempts,
   listQuizzes,
   parseCreateQuizRequest,
@@ -31,7 +35,7 @@ function queryPath(value: string | string[] | undefined): string {
 }
 
 async function handleSavedQuizApi(req: VercelRequest, res: VercelResponse): Promise<void> {
-  const user = await getUserFromAuthHeader(req.headers.authorization);
+  const user = await getUserFromRequest(req);
   if (!user) {
     sendError(res, 401, 'You need to sign in to do that.');
     return;
@@ -62,7 +66,45 @@ async function handleSavedQuizApi(req: VercelRequest, res: VercelResponse): Prom
       sendError(res, 403, 'Your account is not allowed to do that.');
       return;
     }
-    const body: ApiResponse<QuizAttemptRecord[]> = { success: true, data: await getAllQuizAttempts() };
+    const paging = parsePageRequest(req.query);
+    const quizId = queryString(req.query, 'quizId', 40);
+    const { items, total } = await getAllQuizAttempts({ skip: paging.skip, limit: paging.limit, quizId });
+    const body: ApiResponse<QuizAttemptRecord[]> = {
+      success: true,
+      data: items,
+      meta: { total, page: paging.page, limit: paging.limit },
+    };
+    res.status(200).json(body);
+    return;
+  }
+  if (path === 'analytics' && req.method === 'GET') {
+    if (user.role !== 'TEACHER') {
+      sendError(res, 403, 'Your account is not allowed to do that.');
+      return;
+    }
+    const body: ApiResponse<TeacherAnalytics> = { success: true, data: await getTeacherAnalytics() };
+    res.status(200).json(body);
+    return;
+  }
+
+  // Edit or delete one quiz: PUT/DELETE /api/quizzes/:id (teachers only).
+  const idMatch = path.match(/^([^/]+)$/);
+  if (idMatch && (req.method === 'PUT' || req.method === 'DELETE')) {
+    if (user.role !== 'TEACHER') {
+      sendError(res, 403, 'Your account is not allowed to do that.');
+      return;
+    }
+    if (req.method === 'DELETE') {
+      const result = await deleteQuiz(idMatch[1]);
+      if (!result.ok) { sendError(res, result.status, result.error); return; }
+      res.status(200).json({ success: true, data: result.data });
+      return;
+    }
+    const request = parseCreateQuizRequest(req.body);
+    if (!request) { sendError(res, 400, 'Provide a title, description, and valid multiple-choice questions.'); return; }
+    const result = await updateQuiz(idMatch[1], request);
+    if (!result.ok) { sendError(res, result.status, result.error); return; }
+    const body: ApiResponse<QuizContent> = { success: true, data: result.data };
     res.status(200).json(body);
     return;
   }
@@ -122,7 +164,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
     return;
   }
 
-  const practiceUser = await getUserFromAuthHeader(req.headers.authorization);
+  const practiceUser = await getUserFromRequest(req);
   if (!practiceUser) {
     sendError(res, 401, 'You need to sign in to do that.');
     return;

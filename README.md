@@ -3,7 +3,7 @@
 An interactive web app for international friends learning common Filipino
 words and phrases, paired with the history and culture behind each one.
 Built as a strongly-typed full-stack TypeScript monorepo: a React client,
-an Express API serving mock data, and a shared types package that keeps
+an Express API backed by MongoDB, and a shared types package that keeps
 both sides honest.
 
 ## What's inside
@@ -100,95 +100,147 @@ server to serve it directly.
 
 ```bash
 npm run typecheck      # tsc --noEmit / tsc -b across all three workspaces
+npm test --prefix server   # server unit tests
 npm run lint           # ESLint across client/server/shared
 npm run format          # Prettier, writes in place
 ```
 
-## Admin: user management (`/dashboard/admin/users`)
+## Roles
 
-Teachers can create and manage MongoDB-backed student accounts from the
-dashboard's "User management" tile:
-
-- **Create a student** — full name, username, email, initial password (6+
-  characters), and section. Usernames must be unique; the form shows a clear
-  error if one's taken.
-- **Student directory** — every account, with a quick "Reset password" and
-  "Deactivate"/"Reactivate" action per row. Deactivating a student blocks
-  sign-in immediately, even if they're already holding a valid session token.
-- Created accounts can log in right away at `/login` as a student. Passwords
-  are hashed before being stored in MongoDB.
-
-API: `GET`/`POST /api/admin/students`, `PUT /api/admin/students/:id`
-(partial update — send only the fields changing). All three require a
-teacher's token; see `server/src/admin/students.service.ts` for validation
-rules and `server/src/routes/admin.routes.ts` / `client/api/admin/` for the
-Express and Vercel versions.
-
-## Student dashboard (`/dashboard/student`)
-
-A five-tab LMS view, all sharing one top nav:
+**Students** sign in to a six-tab dashboard (`/dashboard/student`):
 
 | Tab | What it shows |
 | --- | --- |
-| Lectures | The vocabulary explorer (word cards, pronunciation, origin badges) |
-| Quizzes | The flashcards/quiz module |
-| Activities | `ACTIVITY`-type tasks, each with a submission box |
-| Performance Tasks | `PERFORMANCE_TASK`-type tasks, same submission flow |
-| My Grades | A table of everything submitted, with score and feedback once graded |
+| Lectures | Teacher-written lectures for their grade, plus the vocabulary explorer |
+| Quizzes | Teacher quizzes (timed, with due dates and attempt limits, answer review afterwards) and the practice flashcards/quiz |
+| Activities | `ACTIVITY` tasks, each with a submission box |
+| Performance Tasks | `PERFORMANCE_TASK` tasks, with an optional file attachment |
+| My Grades | Everything submitted, with score and feedback once graded |
+| Profile | Edit name/email and change password |
 
-Submitting a task calls `POST /api/submissions`; resubmitting the same task
-overwrites the previous submission and resets it to "Pending". Teachers can
-grade assignments and review saved quiz attempts in the Grading Center. New
-lectures, quizzes, tasks, submissions, grades, and quiz attempts persist in
-MongoDB across sessions and devices.
+New or reset accounts must change their default password before anything else
+works (enforced on the server, not just the UI). A notification bell shows new
+content, grades and feedback. Students only see content for their own grade
+(Grade 7–12) or marked "All grades".
 
-## Sign-in
+**Teachers** get four tools from `/dashboard/admin`:
 
-The sign-in page is the landing page. Students see learning materials, quizzes,
-tasks, and grades inside their protected account. Teachers have user management,
-Content Studio, and a Grading Center.
+- **User management** — create students (an automatic default password is
+  suggested), import a class from CSV, search and filter the directory, reset
+  passwords, deactivate/reactivate, and delete accounts (which also removes
+  their submissions and quiz results). Grades are limited to Grade 7–12.
+- **Content studio** — write lectures, build quizzes, and set activities and
+  performance tasks, each aimed at a grade level. Everything published can be
+  edited or deleted afterwards. Quizzes support a time limit, a closing date, an
+  attempt limit, and a switch for whether students may review correct answers.
+- **Grading center** — Activities, Performance tasks and Quizzes tabs, paged 50
+  at a time and refreshed every ten seconds while the tab is visible. Late and
+  resubmitted work is flagged, attachments can be downloaded, and a grade is
+  refused if the student resubmitted while the teacher was grading.
+- **Class analytics** — per-quiz averages, question-by-question analysis (which
+  questions the class misses), per-student progress, and a gradebook CSV export.
 
-The session token expires after eight hours. Before deploying to Vercel, set
-private `AUTH_SECRET` and `MONGO_URI` environment variables in the project
-settings and redeploy. Never store production passwords in source control.
-Production login does not migrate legacy demo users. Existing accounts created
-from demo credentials should have their passwords changed in MongoDB. Local-only
-legacy migration requires `DEV_TEACHER_PASSWORD` and `DEV_STUDENT_PASSWORD` in
-the ignored `server/.env` file. When Express is deployed separately from the
-client, set `CORS_ORIGINS` to trusted frontend origins.
+## Sign-in and sessions
 
-The student dashboard and teacher Grading Center refresh data every ten seconds
-while the tab is visible. Express applies request throttling, login throttling,
-Helmet headers, and a JSON body-size limit. Vercel adds browser security headers,
-but its serverless API functions do not run Express middleware. Configure a
-Vercel Firewall or a shared rate-limit service for production login throttling;
-the Express in-memory limiter does not protect serverless functions.
+The session token (HMAC-signed, valid eight hours) lives in an **httpOnly,
+SameSite=Strict cookie**, so page scripts cannot read it. Every request from the
+app also sends an `X-Requested-With: salita` header, which the server requires
+for any change made with the cookie. A `Bearer` header is still accepted for
+scripts and tests. Signing out clears the cookie on the server, and changing or
+resetting a password invalidates every token issued before it.
 
-The Vercel deployment uses 11 serverless functions to stay within the Hobby
-plan's 12-function limit. `/api/submissions` and `/api/submissions/me` share
-`client/api/submissions.ts`; the rewrite in `client/vercel.json` routes the
-student's submissions lookup to that shared handler.
+Login protections:
+
+- Every credential failure returns the same message, and a dummy password check
+  keeps timing even, so usernames can't be discovered.
+- An account locks for 15 minutes after 3 wrong passwords (silently).
+- Failures are also counted per IP (30 per 15 minutes, stored in MongoDB), so one
+  person can't lock the whole class out for long, and it works on Vercel.
+- Deactivated users are cut off immediately, since every request re-checks the DB.
+
+Before deploying to Vercel, set private `AUTH_SECRET` and `MONGO_URI`
+environment variables and redeploy. Never commit `.env` files. Production login
+does not migrate legacy demo users; local-only migration needs
+`DEV_TEACHER_PASSWORD` and `DEV_STUDENT_PASSWORD` in the ignored `server/.env`.
+When Express is deployed separately from the client, set `CORS_ORIGINS` to the
+trusted frontend origins.
+
+## Limits and safety
+
+- Server-side length caps on all submitted and authored text (submissions
+  10,000 characters, feedback 2,000, short fields 200, quiz questions 500),
+  mirrored in the database models and the form inputs. Points are whole
+  numbers up to 1000.
+- Lists are paginated (`?page=&limit=`, default 50, max 200).
+- File attachments (performance tasks only): PDF, PNG, JPG, DOCX or TXT, up to
+  1 MB, checked by their real contents, stored in MongoDB, and served with
+  download-only headers.
+- Quiz time limits and attempt limits are enforced on the server, not the page.
+- Express applies request throttling, Helmet headers and a JSON body limit.
+  Vercel adds browser security headers, but its serverless functions do not run
+  Express middleware.
+
+## Vercel deployment
+
+Root Directory is `client`; the API lives in `client/api/` as serverless
+functions. The project uses **11 of the 12** functions the Hobby plan allows, so
+new routes are multiplexed into existing functions with query parameters and
+rewrites in `client/vercel.json` instead of adding files:
+
+| Function | Also serves |
+| --- | --- |
+| `api/words.ts` | `/api/health` |
+| `api/tasks.ts` | `/api/content/lectures`, `/api/content/tasks` (and `/:id` for edit/delete) |
+| `api/quiz.ts` | `/api/quizzes/*` (start, submit, results, analytics, edit/delete) |
+| `api/submissions.ts` | `/api/submissions/me`, file upload and download |
+| `api/auth/me.ts` | profile, password change, logout, notifications |
+| `api/admin/students.ts` | CSV import (`?action=import`), gradebook export (`?export=gradebook`) |
 
 ## API reference
 
-All responses use the shared envelope:
-`{ success: boolean; data: T; error?: string }`.
+All responses use the envelope `{ success, data, error?, meta? }`; paginated
+lists add `meta: { total, page, limit }`. "Signed in" means a valid session
+cookie.
 
-| Method | Path                     | Description                                          |
-| ------ | ------------------------ | ----------------------------------------------------- |
-| GET    | `/api/health`            | Liveness check.                                       |
-| GET    | `/api/words`             | All vocabulary words.                                 |
-| GET    | `/api/words?category=food` | Words filtered by category (`greetings`, `food`, `values`, `phrases`). |
-| GET    | `/api/words/:id`         | A single word by id.                                  |
-| GET    | `/api/milestones`        | The full language history timeline, oldest first.     |
-| GET    | `/api/quiz`              | All quiz questions.                                   |
-| GET    | `/api/quiz?count=5`      | A random subset of `count` questions.                 |
-| GET    | `/api/admin/students`    | Student directory. Teacher only.                       |
-| POST   | `/api/admin/students`    | Create a student account. Teacher only.                |
-| PUT    | `/api/admin/students/:id`| Partial update — details, password reset, or status. Teacher only. |
-| GET    | `/api/tasks`             | All activities and performance tasks. Any signed-in user. |
-| GET    | `/api/submissions/me`    | The signed-in student's own submissions.               |
-| POST   | `/api/submissions`       | Submit or resubmit `{ taskId, content }`. Student only. |
+| Method | Path | Description |
+| ------ | ---- | ----------- |
+| GET | `/api/health` | Liveness check. `?deep=1` also pings the database. Public. |
+| POST | `/api/auth/login` | Sign in; sets the session cookie. 401 on any failure, 429 when throttled. |
+| GET / PUT | `/api/auth/me` | Current user / edit own name and email. |
+| POST | `/api/auth/me?action=password` | Change password (issues a fresh cookie). |
+| POST | `/api/auth/me?action=logout` | Clear the session cookie. |
+| GET | `/api/auth/me?action=notifications` | Own notifications and unread count. |
+| POST | `/api/auth/me?action=notifications-read` | Mark `{ ids }` or `{ all: true }` read. |
+| GET | `/api/words`, `/api/milestones`, `/api/quiz` | Practice content. Signed in. |
+| GET | `/api/content/lectures` | Lectures (students: their grade only). |
+| POST / PUT / DELETE | `/api/content/lectures[/:id]` | Create, edit, delete. Teacher. |
+| GET | `/api/tasks` | Activities and performance tasks. |
+| POST / PUT / DELETE | `/api/content/tasks[/:id]` | Create, edit, delete. Teacher. |
+| GET | `/api/quizzes` | Quizzes (teachers also receive correct answers, for editing). |
+| POST / PUT / DELETE | `/api/quizzes[/:id]` | Create, edit, delete. Teacher. |
+| POST | `/api/quizzes/:id/start` | Open a quiz (starts the clock; checks due date and attempts). Student. |
+| POST | `/api/quizzes/:id/submit` | Submit answers; returns the score and, if allowed, the review. Student. |
+| GET | `/api/quizzes/attempts/me` | Own attempts, with review where allowed. Student. |
+| GET | `/api/quizzes/results` | All attempts, paged. Teacher. |
+| GET | `/api/quizzes/analytics` | Class and per-student analytics. Teacher. |
+| GET | `/api/submissions/me` | Own submissions. Student. |
+| POST | `/api/submissions` | Submit or resubmit `{ taskId, content, attachmentId? }`. Student. |
+| POST | `/api/submissions?route=attachment` | Upload a file for a task. Student. |
+| GET | `/api/submissions?route=attachment&id=` | Download a file (its owner or a teacher). |
+| GET | `/api/admin/submissions` | Submissions, paged; `status`, `taskType`, `taskId` filters. Teacher. |
+| PUT | `/api/admin/submissions/:id` | Grade `{ grade, feedback?, expectedSubmittedAt? }`; 409 if the work changed. Teacher. |
+| GET | `/api/admin/students` | Directory, paged; `q`, `section`, `status` filters. `?export=gradebook` returns a CSV. Teacher. |
+| POST | `/api/admin/students` | Create a student. `?action=import` creates up to 10 from CSV rows. Teacher. |
+| PUT / DELETE | `/api/admin/students/:id` | Update details, reset password, change status / delete. Teacher. |
+
+## Tests and CI
+
+```bash
+cd server && npm test      # node:test unit tests: scoring, parsing, cookies, tokens, CSV, uploads
+```
+
+`.github/workflows/ci.yml` typechecks and tests the server and builds the client
+on every push and pull request.
 
 ## Design notes
 
@@ -229,7 +281,6 @@ and editor cruft, so nothing generated gets committed.
   types will guide you (e.g. `category` only accepts the four known
   values), and quiz questions in `quiz.data.ts` can reference any
   `WordItem` by its `id`.
-- **Persistence:** the API is intentionally stateless mock data. Swapping
 - **Persistence:** MongoDB stores users, authored learning content, submissions,
   grades, and quiz attempts. Keep `MONGO_URI` and `AUTH_SECRET` in deployment
   environment settings, not in source control.

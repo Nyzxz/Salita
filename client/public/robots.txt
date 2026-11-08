@@ -1,0 +1,3 @@
+# Salita is a private classroom app: keep it out of search results.
+User-agent: *
+Disallow: /

@@ -1,7 +1,7 @@
 import { useAuth } from '../auth/AuthContext';
 import { DashboardShell } from '../components/layout/DashboardShell';
 import { ModuleGrid } from '../components/layout/ModuleGrid';
-import { BookIcon, ClipboardCheckIcon, UsersIcon } from '../components/common/icons';
+import { BookIcon, ChartIcon, ClipboardCheckIcon, UsersIcon } from '../components/common/icons';
 
 function greetingFor(hour: number): string {
   if (hour < 12) return 'Good morning';
@@ -22,7 +22,7 @@ export function TeacherDashboard() {
         modules={[
           {
             title: 'User management',
-            description: 'Create student accounts and assign usernames and passwords.',
+            description: 'Create or import student accounts, search the directory, and manage sign-ins.',
             href: '/dashboard/admin/users',
             icon: UsersIcon,
           },
@@ -37,6 +37,12 @@ export function TeacherDashboard() {
             description: 'Review student submissions, enter scores, and leave feedback.',
             href: '/dashboard/admin/grading',
             icon: ClipboardCheckIcon,
+          },
+          {
+            title: 'Class analytics',
+            description: 'Quiz averages, the questions students miss most, student progress, and a gradebook export.',
+            href: '/dashboard/admin/analytics',
+            icon: ChartIcon,
           },
         ]}
       />

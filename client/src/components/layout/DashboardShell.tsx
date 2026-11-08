@@ -4,6 +4,7 @@ import { useAuth } from '../../auth/AuthContext';
 import { Avatar } from '../common/Avatar';
 import { Brand } from '../common/Brand';
 import { LogOutIcon } from '../common/icons';
+import { NotificationBell } from '../common/NotificationBell';
 import { AppFooter } from './AppFooter';
 
 interface DashboardShellProps {
@@ -41,6 +42,7 @@ export function DashboardShell({ title, subtitle, eyebrow = 'Teacher workspace',
               </div>
               <Avatar name={session?.user.name ?? '?'} size="sm" />
             </div>
+            <NotificationBell />
             <span aria-hidden="true" className="hidden h-6 w-px bg-night-border sm:block" />
             <button type="button" onClick={handleSignOut} className="btn-ghost btn-sm" aria-label="Sign out">
               <LogOutIcon className="h-4 w-4" />
@@ -56,7 +58,7 @@ export function DashboardShell({ title, subtitle, eyebrow = 'Teacher workspace',
             <p className="eyebrow animate-fade-in-up">{eyebrow}</p>
             <h1 className="animate-fade-in-up mt-2 text-3xl font-semibold text-parchment sm:text-4xl">{title}</h1>
             <p className="animate-fade-in-up mt-3 text-sm leading-relaxed text-muted sm:text-base">{subtitle}</p>
-            {actions && <div className="animate-fade-in-up mt-5">{actions}</div>}
+            {actions && <div className="animate-fade-in-up mt-5 flex flex-wrap items-center gap-3">{actions}</div>}
           </div>
         </div>
       </div>

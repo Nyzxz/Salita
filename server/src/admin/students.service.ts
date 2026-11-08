@@ -1,9 +1,18 @@
+import { randomInt } from 'node:crypto';
 import type {
   CreateStudentRequest,
   GradeLevel,
+  ImportStudentResult,
+  ImportStudentRow,
   StudentAccount,
   UpdateStudentRequest,
 } from '../../../shared/src/types.js';
+import { connectDB } from '../config/db.js';
+import { csvRow } from '../csv.js';
+import { Quiz } from '../models/Quiz.js';
+import { LearningContent } from '../models/LearningContent.js';
+import { TASKS } from '../data/tasks.data.js';
+import { escapeRegExp } from '../pagination.js';
 import { isGradeLevel } from '../grades.js';
 import { QuizAttempt } from '../models/QuizAttempt.js';
 import { Submission } from '../models/Submission.js';
@@ -91,9 +100,37 @@ function isDuplicateKeyError(error: unknown): boolean {
   return typeof error === 'object' && error !== null && 'code' in error && error.code === 11000;
 }
 
-export async function getAllStudents(): Promise<StudentAccount[]> {
-  const records = await UserModel.find({ role: 'STUDENT' }).sort({ createdAt: -1 });
-  return records.map(toStudentAccount);
+export interface StudentFilters {
+  skip?: number;
+  limit?: number;
+  /** Case-insensitive match on name, username or email. */
+  q?: string;
+  section?: GradeLevel;
+  status?: StudentAccount['status'];
+}
+
+export interface StudentPage {
+  items: StudentAccount[];
+  total: number;
+}
+
+export async function getAllStudents(filters: StudentFilters = {}): Promise<StudentPage> {
+  await connectDB();
+  const query: Record<string, unknown> = { role: 'STUDENT' };
+  if (filters.section) query.section = filters.section;
+  if (filters.status) query.status = filters.status;
+  if (filters.q) {
+    const pattern = new RegExp(escapeRegExp(filters.q), 'i');
+    query.$or = [{ fullName: pattern }, { username: pattern }, { email: pattern }];
+  }
+  const [records, total] = await Promise.all([
+    UserModel.find(query)
+      .sort({ createdAt: -1 })
+      .skip(filters.skip ?? 0)
+      .limit(filters.limit ?? 50),
+    UserModel.countDocuments(query),
+  ]);
+  return { items: records.map(toStudentAccount), total };
 }
 
 export async function addStudent(
@@ -195,4 +232,114 @@ export async function removeStudent(id: string): Promise<ServiceResult<{ id: str
     }
     throw error;
   }
+}
+
+
+// ---------------------------------------------------------------------------
+// CSV import
+// ---------------------------------------------------------------------------
+
+/** Rows per request: each account costs a slow password hash, and serverless requests time out. */
+export const MAX_IMPORT_ROWS = 10;
+
+/** A default password like "Salita-ana-482193", chosen by the server with a secure random source. */
+export function generateDefaultPassword(username: string): string {
+  const base = username.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 8) || 'student';
+  return `Salita-${base}-${randomInt(100000, 1000000)}`;
+}
+
+export function parseImportStudentsRequest(body: unknown): ImportStudentRow[] | null {
+  if (typeof body !== 'object' || body === null) return null;
+  const { students } = body as Record<string, unknown>;
+  if (!Array.isArray(students) || students.length === 0 || students.length > MAX_IMPORT_ROWS) return null;
+  const rows: ImportStudentRow[] = [];
+  for (const item of students) {
+    if (typeof item !== 'object' || item === null) return null;
+    const { fullName, username, email, section } = item as Record<string, unknown>;
+    // Rows that don't pass the normal rules are reported per row rather than failing the whole batch.
+    rows.push({
+      fullName: typeof fullName === 'string' ? fullName : '',
+      username: typeof username === 'string' ? username : '',
+      email: typeof email === 'string' ? email : '',
+      section: (typeof section === 'string' ? section : '') as GradeLevel,
+    });
+  }
+  return rows;
+}
+
+export async function importStudents(rows: ImportStudentRow[]): Promise<ImportStudentResult[]> {
+  await connectDB();
+  const results: ImportStudentResult[] = [];
+  for (const row of rows) {
+    const password = generateDefaultPassword(row.username);
+    const request = parseCreateStudentRequest({ ...row, password });
+    if (!request) {
+      results.push({
+        username: row.username,
+        status: 'skipped',
+        reason: 'Check the name, username (3–40 letters, numbers . _ -), email and grade (Grade 7–12).',
+      });
+      continue;
+    }
+    const created = await addStudent(request);
+    results.push(
+      created.ok
+        ? { username: request.username.toLowerCase(), status: 'created', password }
+        : { username: request.username, status: 'skipped', reason: created.error },
+    );
+  }
+  return results;
+}
+
+// ---------------------------------------------------------------------------
+// Gradebook export
+// ---------------------------------------------------------------------------
+
+/** One CSV: a row per student, a column per task (points earned) and per quiz (best score %). */
+export async function buildGradebookCsv(): Promise<string> {
+  await connectDB();
+  const [students, tasks, quizzes, submissions, attempts] = await Promise.all([
+    UserModel.find({ role: 'STUDENT' }).sort({ section: 1, fullName: 1 }).limit(2000).lean(),
+    LearningContent.find({ type: { $in: ['ACTIVITY', 'PERFORMANCE_TASK'] } }).sort({ createdAt: 1 }).limit(200).lean(),
+    Quiz.find().sort({ createdAt: 1 }).limit(200).select('title').lean(),
+    Submission.find({ status: 'GRADED' }).select('taskId studentId grade').lean(),
+    QuizAttempt.find().select('quizId studentId percentageScore').lean(),
+  ]);
+
+  const taskColumns = [
+    ...tasks.map((task) => ({ id: String(task._id), title: task.title ?? 'Task', points: task.totalPoints ?? 0 })),
+    ...TASKS.map((task) => ({ id: task.id, title: task.title, points: task.totalPoints })),
+  ];
+  const grades = new Map<string, number>();
+  for (const submission of submissions) {
+    if (submission.grade !== undefined) grades.set(`${submission.taskId}:${String(submission.studentId)}`, submission.grade);
+  }
+  const best = new Map<string, number>();
+  for (const attempt of attempts) {
+    const key = `${String(attempt.quizId)}:${String(attempt.studentId)}`;
+    best.set(key, Math.max(best.get(key) ?? 0, attempt.percentageScore));
+  }
+
+  const lines = [
+    csvRow([
+      'Full name',
+      'Username',
+      'Grade',
+      ...taskColumns.map((task) => `${task.title} (/${task.points})`),
+      ...quizzes.map((quiz) => `Quiz: ${quiz.title} (best %)`),
+    ]),
+  ];
+  for (const student of students) {
+    const id = String(student._id);
+    lines.push(
+      csvRow([
+        student.fullName,
+        student.username,
+        student.section ?? '',
+        ...taskColumns.map((task) => grades.get(`${task.id}:${id}`) ?? ''),
+        ...quizzes.map((quiz) => best.get(`${String(quiz._id)}:${id}`) ?? ''),
+      ]),
+    );
+  }
+  return `\uFEFF${lines.join('\r\n')}\r\n`;
 }

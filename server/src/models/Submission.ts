@@ -10,6 +10,8 @@ export interface SubmissionDocument extends Document {
   feedback?: string;
   status: 'PENDING' | 'GRADED';
   resubmittedAfterGrade?: boolean;
+  late?: boolean;
+  attachment?: { id: Types.ObjectId; fileName: string; contentType: string; size: number } | null;
 }
 
 const submissionSchema = new Schema<SubmissionDocument>(
@@ -23,11 +25,25 @@ const submissionSchema = new Schema<SubmissionDocument>(
     feedback: { type: String, trim: true, maxlength: 2000 },
     status: { type: String, enum: ['PENDING', 'GRADED'], default: 'PENDING', required: true },
     resubmittedAfterGrade: { type: Boolean, default: false },
+    late: { type: Boolean, default: false },
+    attachment: {
+      type: {
+        _id: false,
+        id: { type: Schema.Types.ObjectId, ref: 'Attachment', required: true },
+        fileName: { type: String, required: true },
+        contentType: { type: String, required: true },
+        size: { type: Number, required: true },
+      },
+      default: undefined,
+    },
   },
   { timestamps: true },
 );
 
 submissionSchema.index({ taskId: 1, studentId: 1 }, { unique: true });
+// The grading lists filter by status and sort newest first.
+submissionSchema.index({ status: 1, submittedAt: -1 });
+submissionSchema.index({ submittedAt: -1 });
 
 export const Submission: Model<SubmissionDocument> =
   (mongoose.models.Submission as Model<SubmissionDocument> | undefined) ??

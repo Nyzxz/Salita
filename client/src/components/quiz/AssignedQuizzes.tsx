@@ -14,6 +14,7 @@ import { EmptyState } from '../ui/EmptyState';
 import { gradeLabel } from '../ui/GradeSelect';
 import { Notice } from '../ui/Notice';
 import { PageIntro } from '../ui/PageIntro';
+import { QuizReview } from './QuizReview';
 import { ArrowLeftIcon, ArrowRightIcon, CheckIcon, ClockIcon, InboxIcon, QuizIcon } from '../common/icons';
 
 export function AssignedQuizzes() {
@@ -28,6 +29,7 @@ export function AssignedQuizzes() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isStarting, setIsStarting] = useState(false);
+  const [reviewing, setReviewing] = useState<QuizAttemptRecord | null>(null);
   /** Server-decided closing time (ms since epoch) for a timed quiz. */
   const [deadline, setDeadline] = useState<number | null>(null);
   const [secondsLeft, setSecondsLeft] = useState<number | null>(null);
@@ -202,6 +204,11 @@ export function AssignedQuizzes() {
           <button type="button" onClick={() => setSelectedQuiz(null)} className="btn-secondary mt-6">
             Return to quizzes
           </button>
+          {latestAttempt.review && (
+            <div className="mt-8 border-t border-night-border pt-6">
+              <QuizReview attempt={latestAttempt} />
+            </div>
+          )}
         </div>
       ) : quizzes.length === 0 ? (
         <EmptyState icon={<QuizIcon />} title="No quizzes yet" description="When your teacher publishes a quiz, it will appear here." />
@@ -210,6 +217,9 @@ export function AssignedQuizzes() {
           {quizzes.map((quiz) => {
             const previousAttempts = attempts.filter((attempt) => attempt.quizId === quiz.id);
             const previous = previousAttempts[0];
+            const isClosed = quiz.dueDate ? new Date(quiz.dueDate).getTime() < Date.now() : false;
+            const attemptsLeft = quiz.maxAttempts ? Math.max(0, quiz.maxAttempts - previousAttempts.length) : null;
+            const isBlocked = isClosed || attemptsLeft === 0;
             return (
               <li key={quiz.id} className="surface-interactive flex flex-col p-6">
                 <h3 className="text-lg font-semibold text-parchment">{quiz.title}</h3>
@@ -219,10 +229,20 @@ export function AssignedQuizzes() {
                   <span className="badge-neutral">{quiz.questions.length} questions</span>
                   {quiz.timeLimitMinutes ? <span className="badge-neutral"><ClockIcon className="h-3 w-3" />{quiz.timeLimitMinutes} min</span> : null}
                   {previous ? <span className="badge-leaf">Last score {previous.percentageScore}%</span> : null}
+                  {quiz.dueDate ? (
+                    <span className={isClosed ? 'badge-clay' : 'badge-neutral'}>
+                      {isClosed ? 'Closed' : 'Due'} {new Date(quiz.dueDate).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}
+                    </span>
+                  ) : null}
+                  {attemptsLeft !== null ? (
+                    <span className={attemptsLeft === 0 ? 'badge-clay' : 'badge-neutral'}>
+                      {attemptsLeft === 0 ? 'No attempts left' : `${attemptsLeft} attempt${attemptsLeft === 1 ? '' : 's'} left`}
+                    </span>
+                  ) : null}
                 </div>
-                <button type="button" onClick={() => void beginQuiz(quiz)} disabled={isStarting} className="btn-primary btn-sm mt-5 self-start">
-                  {previous ? 'Retake quiz' : 'Start quiz'}
-                  <ArrowRightIcon className="h-3.5 w-3.5" />
+                <button type="button" onClick={() => void beginQuiz(quiz)} disabled={isStarting || isBlocked} className="btn-primary btn-sm mt-5 self-start">
+                  {isBlocked ? (isClosed ? 'Quiz closed' : 'No attempts left') : previous ? 'Retake quiz' : 'Start quiz'}
+                  {!isBlocked && <ArrowRightIcon className="h-3.5 w-3.5" />}
                 </button>
               </li>
             );
@@ -238,7 +258,7 @@ export function AssignedQuizzes() {
           <div className="table-wrap overflow-x-auto">
             <table className="data-table">
               <thead>
-                <tr><th>Quiz</th><th>Score</th><th>Completed</th></tr>
+                <tr><th>Quiz</th><th>Score</th><th>Completed</th><th><span className="sr-only">Review</span></th></tr>
               </thead>
               <tbody>
                 {attempts.map((attempt) => (
@@ -251,10 +271,22 @@ export function AssignedQuizzes() {
                       <span className="ml-2 text-xs text-muted">{attempt.scoreObtained}/{attempt.totalPossiblePoints}</span>
                     </td>
                     <td className="text-muted">{new Date(attempt.completedAt).toLocaleString()}</td>
+                    <td>
+                      {attempt.review ? (
+                        <button type="button" className="btn-ghost btn-sm" onClick={() => setReviewing(reviewing?.id === attempt.id ? null : attempt)}>
+                          {reviewing?.id === attempt.id ? 'Hide review' : 'Review answers'}
+                        </button>
+                      ) : null}
+                    </td>
                   </tr>
                 ))}
               </tbody>
             </table>
+          </div>
+        )}
+        {reviewing && (
+          <div className="surface mt-5 animate-fade-in p-5 sm:p-6">
+            <QuizReview attempt={reviewing} />
           </div>
         )}
       </div>

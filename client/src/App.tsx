@@ -7,6 +7,7 @@ import { TeacherDashboard } from './pages/TeacherDashboard';
 import { TeacherGradingPage } from './pages/TeacherGradingPage';
 import { UserManagementPage } from './pages/admin/UserManagementPage';
 import { ContentStudioPage } from './pages/admin/ContentStudioPage';
+import { AnalyticsPage } from './pages/admin/AnalyticsPage';
 import { ChangePasswordPage } from './pages/ChangePasswordPage';
 import { NotFoundPage } from './pages/NotFoundPage';
 
@@ -55,6 +56,14 @@ export default function App() {
             element={
               <ProtectedRoute role="TEACHER">
                 <TeacherGradingPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/dashboard/admin/analytics"
+            element={
+              <ProtectedRoute role="TEACHER">
+                <AnalyticsPage />
               </ProtectedRoute>
             }
           />

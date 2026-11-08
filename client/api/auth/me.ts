@@ -1,12 +1,19 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import type { ApiResponse, AuthSession, User } from '../../../shared/src/types.js';
+import type { ApiResponse, AuthSession, NotificationFeed, User } from '../../../shared/src/types.js';
 import {
   changePassword,
-  getUserFromAuthHeader,
+  getUserFromRequest,
   parseChangePasswordRequest,
   parseUpdateProfileRequest,
   updateProfile,
 } from '../../../server/src/auth/auth.service.js';
+import { clearSessionCookie } from '../../../server/src/auth/cookies.js';
+import { toCookieSession } from '../../../server/src/auth/sessionResponse.js';
+import {
+  listNotifications,
+  markNotificationsRead,
+  parseMarkReadRequest,
+} from '../../../server/src/notifications/notifications.service.js';
 
 function fail(res: VercelResponse, status: number, error: string): void {
   const body: ApiResponse<null> = { success: false, data: null, error };
@@ -14,20 +21,48 @@ function fail(res: VercelResponse, status: number, error: string): void {
 }
 
 /**
- * GET  /api/auth/me                  — who am I
- * PUT  /api/auth/me                  — edit my name / email
- * POST /api/auth/me?action=password  — change my password (returns a fresh session)
- * (One function for all three keeps the project inside Vercel's 12-function limit.)
+ * GET  /api/auth/me                          — who am I
+ * PUT  /api/auth/me                          — edit my name / email
+ * POST /api/auth/me?action=password          — change my password (sets a fresh session cookie)
+ * POST /api/auth/me?action=logout            — end my session (clears the cookie)
+ * GET  /api/auth/me?action=notifications     — my notifications and unread count
+ * POST /api/auth/me?action=notifications-read — mark notifications read ({ ids } or { all: true })
+ * (One function for all of these keeps the project inside Vercel's 12-function limit.)
  */
 export default async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
-  const header = req.headers.authorization;
+  res.setHeader('Cache-Control', 'no-store');
+
+  // Signing out must always clear the cookie, even if the session has already expired.
+  if (req.method === 'POST' && req.query.action === 'logout') {
+    res.setHeader('Set-Cookie', clearSessionCookie());
+    const body: ApiResponse<null> = { success: true, data: null };
+    res.status(200).json(body);
+    return;
+  }
+
   // A student who still has to change their default password may reach this endpoint (and only this one).
-  const user = await getUserFromAuthHeader(typeof header === 'string' ? header : undefined, {
-    allowPasswordChange: true,
-  });
+  const user = await getUserFromRequest(req, { allowPasswordChange: true });
 
   if (!user) {
     fail(res, 401, 'You need to sign in to do that.');
+    return;
+  }
+
+  if (req.method === 'GET' && req.query.action === 'notifications') {
+    const body: ApiResponse<NotificationFeed> = { success: true, data: await listNotifications(user.id) };
+    res.status(200).json(body);
+    return;
+  }
+
+  if (req.method === 'POST' && req.query.action === 'notifications-read') {
+    const ids = parseMarkReadRequest(req.body);
+    if (!ids) {
+      fail(res, 400, 'Say which notifications to mark as read.');
+      return;
+    }
+    await markNotificationsRead(user.id, ids);
+    const body: ApiResponse<NotificationFeed> = { success: true, data: await listNotifications(user.id) };
+    res.status(200).json(body);
     return;
   }
 
@@ -64,7 +99,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
       fail(res, result.status, result.error);
       return;
     }
-    const body: ApiResponse<AuthSession> = { success: true, data: result.data };
+    const { session, setCookie } = toCookieSession(result.data);
+    res.setHeader('Set-Cookie', setCookie);
+    const body: ApiResponse<AuthSession> = { success: true, data: session };
     res.status(200).json(body);
     return;
   }

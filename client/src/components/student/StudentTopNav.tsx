@@ -1,5 +1,6 @@
 import { useLayoutEffect, useRef, useState, type ComponentType, type SVGProps } from 'react';
 import { Avatar } from '../common/Avatar';
+import { NotificationBell } from '../common/NotificationBell';
 import { Brand } from '../common/Brand';
 import {
   BookIcon,
@@ -56,6 +57,7 @@ export function StudentTopNav({ activeTab, onChangeTab, studentName, onSignOut }
             </div>
             <Avatar name={studentName} size="sm" accent="leaf" />
           </div>
+          <NotificationBell />
           <span aria-hidden="true" className="hidden h-6 w-px bg-night-border sm:block" />
           <button type="button" onClick={onSignOut} className="btn-ghost btn-sm" aria-label="Sign out">
             <LogOutIcon className="h-4 w-4" />

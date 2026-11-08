@@ -1,13 +1,14 @@
-import { useCallback, useEffect, useState } from 'react';
-import type { CreateStudentRequest, StudentAccount } from '@shared/types';
-import { createStudentAccount, deleteStudentAccount, fetchStudents, updateStudentAccount } from '../../api/admin';
-import { ApiRequestError } from '../../api/client';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { GRADE_LEVELS, type CreateStudentRequest, type GradeLevel, type StudentAccount } from '@shared/types';
+import { createStudentAccount, deleteStudentAccount, downloadGradebook, fetchStudents, updateStudentAccount } from '../../api/admin';
+import { ApiRequestError, saveBlob } from '../../api/client';
 import { useAuth } from '../../auth/AuthContext';
 import { DashboardShell } from '../../components/layout/DashboardShell';
 import { BackLink } from '../../components/layout/BackLink';
 import { Notice } from '../../components/ui/Notice';
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog';
-import { CheckIcon } from '../../components/common/icons';
+import { CheckIcon, DownloadIcon, SearchIcon } from '../../components/common/icons';
+import { ImportStudentsPanel } from '../../components/admin/ImportStudentsPanel';
 import { LoadingState } from '../../components/common/LoadingState';
 import { ErrorState } from '../../components/common/ErrorState';
 import { CreateStudentForm } from '../../components/admin/CreateStudentForm';
@@ -18,6 +19,15 @@ export function UserManagementPage() {
   const token = session?.token ?? '';
 
   const [students, setStudents] = useState<StudentAccount[] | null>(null);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [sectionFilter, setSectionFilter] = useState<GradeLevel | ''>('');
+  const [statusFilter, setStatusFilter] = useState<StudentAccount['status'] | ''>('');
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
+  const requestId = useRef(0);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
@@ -29,20 +39,61 @@ export function UserManagementPage() {
   const [isDeleting, setIsDeleting] = useState(false);
   const [copied, setCopied] = useState(false);
 
+  // Wait for a pause in typing before asking the server to search.
+  useEffect(() => {
+    const timer = window.setTimeout(() => setDebouncedSearch(search), 300);
+    return () => window.clearTimeout(timer);
+  }, [search]);
+
   const load = useCallback(() => {
+    const id = (requestId.current += 1);
     setIsLoading(true);
     setLoadError(null);
-    fetchStudents(token)
-      .then(setStudents)
+    setPage(1);
+    fetchStudents({ page: 1, q: debouncedSearch, section: sectionFilter, status: statusFilter })
+      .then(({ items, meta }) => {
+        if (id !== requestId.current) return;
+        setStudents(items);
+        setTotal(meta.total);
+      })
       .catch((err: unknown) => {
+        if (id !== requestId.current) return;
         setLoadError(err instanceof ApiRequestError ? err.message : 'Could not load students.');
       })
-      .finally(() => setIsLoading(false));
-  }, [token]);
+      .finally(() => {
+        if (id === requestId.current) setIsLoading(false);
+      });
+  }, [debouncedSearch, sectionFilter, statusFilter]);
 
   useEffect(() => {
     load();
   }, [load]);
+
+  const loadMore = async () => {
+    setIsLoadingMore(true);
+    try {
+      const { items, meta } = await fetchStudents({ page: page + 1, q: debouncedSearch, section: sectionFilter, status: statusFilter });
+      setStudents((prev) => [...(prev ?? []), ...items.filter((item) => !prev?.some((existing) => existing.id === item.id))]);
+      setTotal(meta.total);
+      setPage(page + 1);
+    } catch (err) {
+      setLoadError(err instanceof ApiRequestError ? err.message : 'Could not load more students.');
+    } finally {
+      setIsLoadingMore(false);
+    }
+  };
+
+  const exportGradebook = async () => {
+    setIsExporting(true);
+    setLoadError(null);
+    try {
+      saveBlob(await downloadGradebook(), 'salita-gradebook.csv');
+    } catch (err) {
+      setLoadError(err instanceof ApiRequestError ? err.message : 'Could not export the gradebook.');
+    } finally {
+      setIsExporting(false);
+    }
+  };
 
   const handleCreate = async (request: CreateStudentRequest) => {
     setFormError(null);
@@ -50,7 +101,8 @@ export function UserManagementPage() {
     setIsSaving(true);
     try {
       const created = await createStudentAccount(request, token);
-      setStudents((prev) => (prev ? [...prev, created] : [created]));
+      setStudents((prev) => (prev ? [created, ...prev] : [created]));
+      setTotal((count) => count + 1);
       setSuccessMessage(null);
       setCredentials({ name: created.fullName, username: created.username, password: request.password, reason: 'Account created' });
     } catch (err) {
@@ -99,6 +151,7 @@ export function UserManagementPage() {
     try {
       await deleteStudentAccount(toDelete.id, token);
       setStudents((prev) => prev?.filter((s) => s.id !== toDelete.id) ?? null);
+      setTotal((count) => Math.max(0, count - 1));
       setSuccessMessage(`${toDelete.fullName}'s account and records were deleted.`);
       setCredentials((current) => (current?.username === toDelete.username ? null : current));
       setToDelete(null);
@@ -126,7 +179,14 @@ export function UserManagementPage() {
       eyebrow="Teacher workspace"
       title="User management"
       subtitle="Create student accounts and manage who can sign in."
-      actions={<BackLink />}
+      actions={
+        <>
+          <BackLink />
+          <button type="button" className="btn-secondary btn-sm" disabled={isExporting} onClick={() => void exportGradebook()}>
+            <DownloadIcon className="h-3.5 w-3.5" /> {isExporting ? 'Preparing…' : 'Export gradebook (CSV)'}
+          </button>
+        </>
+      }
     >
       {successMessage && <Notice tone="success" className="mb-6">{successMessage}</Notice>}
 
@@ -168,6 +228,9 @@ export function UserManagementPage() {
           <div className="surface mt-5 p-6">
             <CreateStudentForm onSubmit={handleCreate} isSaving={isSaving} error={formError} />
           </div>
+          <div className="mt-8">
+            <ImportStudentsPanel onImported={load} />
+          </div>
         </section>
 
         <section aria-labelledby="directory-heading" className="min-w-0">
@@ -178,10 +241,40 @@ export function UserManagementPage() {
             </div>
             {students && (
               <div className="flex gap-2">
-                <span className="badge-neutral">{students.length} total</span>
-                <span className="badge-leaf">{activeCount} active</span>
+                <span className="badge-neutral">{total} total</span>
+                <span className="badge-leaf">{activeCount} active shown</span>
               </div>
             )}
+          </div>
+
+          <div className="mt-4 flex flex-wrap gap-3">
+            <label className="relative min-w-[12rem] flex-1">
+              <span className="sr-only">Search students</span>
+              <SearchIcon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
+              <input
+                type="search"
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="Search by name, username or email"
+                maxLength={80}
+                className="field pl-9"
+              />
+            </label>
+            <label>
+              <span className="sr-only">Filter by grade</span>
+              <select value={sectionFilter} onChange={(event) => setSectionFilter(event.target.value as GradeLevel | '')} className="field">
+                <option value="">All grades</option>
+                {GRADE_LEVELS.map((grade) => <option key={grade} value={grade}>{grade}</option>)}
+              </select>
+            </label>
+            <label>
+              <span className="sr-only">Filter by status</span>
+              <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as StudentAccount['status'] | '')} className="field">
+                <option value="">Any status</option>
+                <option value="ACTIVE">Active</option>
+                <option value="INACTIVE">Deactivated</option>
+              </select>
+            </label>
           </div>
           <div className="mt-5">
             {isLoading && <LoadingState label="Loading students…" />}
@@ -194,6 +287,14 @@ export function UserManagementPage() {
                 onResetPassword={handleResetPassword}
                 onDelete={setToDelete}
               />
+            )}
+            {students && !isLoading && !loadError && students.length < total && (
+              <div className="mt-4 flex items-center justify-between gap-3 text-sm text-muted">
+                <span>Showing {students.length} of {total}</span>
+                <button type="button" className="btn-secondary btn-sm" disabled={isLoadingMore} onClick={() => void loadMore()}>
+                  {isLoadingMore ? 'Loading…' : 'Load more'}
+                </button>
+              </div>
             )}
           </div>
         </section>

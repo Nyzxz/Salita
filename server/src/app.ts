@@ -2,6 +2,8 @@ import cors from 'cors';
 import rateLimit from 'express-rate-limit';
 import express, { type Express } from 'express';
 import helmet from 'helmet';
+import mongoose from 'mongoose';
+import { connectDB } from './config/db.js';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler.js';
 import { authRouter } from './routes/auth.routes.js';
 import { adminRouter } from './routes/admin.routes.js';
@@ -32,10 +34,13 @@ export function createApp(): Express {
         callback(null, !origin || allowedOrigins.has(origin));
       },
       methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-      allowedHeaders: ['Authorization', 'Content-Type', 'Accept'],
+      allowedHeaders: ['Authorization', 'Content-Type', 'Accept', 'X-Requested-With'],
+      credentials: true,
       maxAge: 600,
     }),
   );
+  // File uploads arrive as base64 JSON, so that one router gets a bigger body limit (parsed before the global one).
+  app.use('/api/submissions', express.json({ limit: '2mb' }));
   app.use(express.json({ limit: '32kb' }));
   app.use(
     '/api',
@@ -59,8 +64,18 @@ export function createApp(): Express {
     });
   });
 
-  app.get('/api/health', (_req, res) => {
-    res.json({ success: true, data: { status: 'ok' } });
+  app.get('/api/health', async (req, res) => {
+    let database: 'ok' | 'down' | 'skipped' = 'skipped';
+    if (req.query.deep === '1') {
+      try {
+        await connectDB();
+        database = mongoose.connection.readyState === 1 ? 'ok' : 'down';
+      } catch {
+        database = 'down';
+      }
+    }
+    const healthy = database !== 'down';
+    res.status(healthy ? 200 : 503).json({ success: healthy, data: { status: healthy ? 'ok' : 'degraded', database } });
   });
 
   app.use('/api/auth', authRouter);

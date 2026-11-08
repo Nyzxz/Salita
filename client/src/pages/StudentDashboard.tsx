@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
 import { ProfileSection } from '../components/profile/ProfileSection';
@@ -12,10 +12,27 @@ import { AssignedQuizzes } from '../components/quiz/AssignedQuizzes';
 import { AppFooter } from '../components/layout/AppFooter';
 import { AuthoredLectures } from '../components/student/AuthoredLectures';
 
+const TAB_IDS: StudentTab[] = ['lectures', 'quizzes', 'activities', 'performance', 'grades', 'profile'];
+
+function tabFromHash(): StudentTab | null {
+  const hash = window.location.hash.replace('#', '');
+  return (TAB_IDS as string[]).includes(hash) ? (hash as StudentTab) : null;
+}
+
 export function StudentDashboard() {
   const { session, logout } = useAuth();
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState<StudentTab>('lectures');
+  const [activeTab, setActiveTab] = useState<StudentTab>(tabFromHash() ?? 'lectures');
+
+  // Notification links like /dashboard/student#grades open the matching tab.
+  useEffect(() => {
+    const onHash = () => {
+      const tab = tabFromHash();
+      if (tab) setActiveTab(tab);
+    };
+    window.addEventListener('hashchange', onHash);
+    return () => window.removeEventListener('hashchange', onHash);
+  }, []);
   // Only poll while a tab that shows tasks or grades is open.
   const learning = useTasksAndSubmissions(
     session?.token ?? '',

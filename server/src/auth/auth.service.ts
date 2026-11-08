@@ -14,6 +14,7 @@ import { connectDB } from '../config/db.js';
 import { User as UserModel, type UserDocument } from '../models/User.js';
 import { checkLockout, clearedState, recordFailedAttempt } from './loginAttempts.js';
 import { recordIpFailure, throttleSecondsLeft } from './ipThrottle.js';
+import { CSRF_HEADER, CSRF_VALUE, SESSION_COOKIE, readCookie } from './cookies.js';
 import { TOKEN_TTL_SECONDS, createToken, verifyToken } from './token.js';
 
 /**
@@ -197,6 +198,40 @@ export async function getUserFromAuthHeader(
   } catch {
     return null;
   }
+}
+
+/** The parts of a request that sign-in needs; satisfied by both Express and Vercel requests. */
+export interface AuthRequestLike {
+  headers: Record<string, string | string[] | undefined>;
+  method?: string;
+}
+
+/**
+ * Resolves the signed-in user for a request.
+ *
+ * The token normally arrives in the httpOnly session cookie. A cookie is sent
+ * automatically by the browser, so for anything that changes data it must come
+ * with the custom `X-Requested-With` header (plus the cookie is SameSite=Strict),
+ * which a cross-site page cannot add. A Bearer header is still accepted for
+ * scripts and tests; it is never sent automatically, so it needs no such header.
+ */
+export async function getUserFromRequest(
+  request: AuthRequestLike,
+  options: { allowPasswordChange?: boolean } = {},
+): Promise<User | null> {
+  const authorization = request.headers.authorization;
+  const bearer = typeof authorization === 'string' ? authorization : undefined;
+  if (bearer?.startsWith('Bearer ')) return getUserFromAuthHeader(bearer, options);
+
+  const cookieToken = readCookie(request.headers, SESSION_COOKIE);
+  if (!cookieToken) return null;
+
+  const method = (request.method ?? 'GET').toUpperCase();
+  if (method !== 'GET' && method !== 'HEAD' && method !== 'OPTIONS') {
+    const marker = request.headers[CSRF_HEADER];
+    if ((Array.isArray(marker) ? marker[0] : marker) !== CSRF_VALUE) return null;
+  }
+  return getUserFromAuthHeader(`Bearer ${cookieToken}`, options);
 }
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;

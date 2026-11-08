@@ -1,11 +1,11 @@
 import type { NextFunction, Request, Response } from 'express';
 import type { UserRole } from '../../../shared/src/types.js';
-import { getUserFromAuthHeader } from '../auth/auth.service.js';
+import { getUserFromRequest } from '../auth/auth.service.js';
 import { ApiError } from './errorHandler.js';
 
 function buildGuard(allowPasswordChange: boolean, allowedRoles: UserRole[]) {
   return (req: Request, res: Response, next: NextFunction): void => {
-    void getUserFromAuthHeader(req.header('authorization'), { allowPasswordChange })
+    void getUserFromRequest(req, { allowPasswordChange })
       .then((user) => {
         if (!user) {
           next(new ApiError(401, 'You need to sign in to do that.'));

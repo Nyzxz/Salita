@@ -23,7 +23,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
   }
 
   const ip = clientIpFrom(req.headers, undefined);
-  const { status, body, retryAfterSeconds } = loginOutcomeToHttp(await login(request, ip));
+  const { status, body, retryAfterSeconds, setCookie } = loginOutcomeToHttp(await login(request, ip));
   if (retryAfterSeconds) res.setHeader('Retry-After', String(retryAfterSeconds));
+  if (setCookie) res.setHeader('Set-Cookie', setCookie);
+  res.setHeader('Cache-Control', 'no-store');
   res.status(status).json(body);
 }

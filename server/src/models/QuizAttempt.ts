@@ -11,6 +11,10 @@ export interface IQuizAttempt extends Document {
   percentageScore: number;
   feedback: string;
   completedAt: Date;
+  /** The questions as they were when the student took the quiz, so later edits don't change old results. */
+  questions: Array<{ questionText: string; options: string[]; correctAnswerIndex: number; points: number }>;
+  /** Whether the student may review correct answers for this attempt. */
+  reviewable: boolean;
 }
 
 const quizAttemptSchema = new Schema<IQuizAttempt>(
@@ -25,11 +29,25 @@ const quizAttemptSchema = new Schema<IQuizAttempt>(
     percentageScore: { type: Number, required: true, min: 0, max: 100 },
     feedback: { type: String, required: true },
     completedAt: { type: Date, default: Date.now, required: true },
+    questions: {
+      type: [
+        {
+          _id: false,
+          questionText: { type: String, required: true },
+          options: { type: [String], required: true },
+          correctAnswerIndex: { type: Number, required: true },
+          points: { type: Number, required: true },
+        },
+      ],
+      default: [],
+    },
+    reviewable: { type: Boolean, default: false },
   },
   { timestamps: false },
 );
 
 quizAttemptSchema.index({ studentId: 1, completedAt: -1 });
+quizAttemptSchema.index({ quizId: 1, completedAt: -1 });
 
 export const QuizAttempt: Model<IQuizAttempt> =
   (mongoose.models.QuizAttempt as Model<IQuizAttempt> | undefined) ??

@@ -45,8 +45,8 @@ export function useTasksAndSubmissions(token: string, polling = true) {
   }, [load, polling]);
 
   const submit = useCallback(
-    async (taskId: string, content: string) => {
-      const record = await submitTaskWork({ taskId, content }, token);
+    async (taskId: string, content: string, attachmentId?: string) => {
+      const record = await submitTaskWork({ taskId, content, ...(attachmentId ? { attachmentId } : {}) }, token);
       setSubmissions((prev) => [...(prev?.filter((s) => s.taskId !== taskId) ?? []), record]);
     },
     [token],

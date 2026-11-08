@@ -1,6 +1,18 @@
 import { Router } from 'express';
-import type { ApiResponse, StudentAccount, SubmissionRecord } from '../../../shared/src/types.js';
-import { addStudent, editStudent, getAllStudents, parseCreateStudentRequest, parseUpdateStudentRequest, removeStudent } from '../admin/students.service.js';
+import type { ApiResponse, ImportStudentResult, StudentAccount, SubmissionRecord } from '../../../shared/src/types.js';
+import {
+  addStudent,
+  buildGradebookCsv,
+  editStudent,
+  getAllStudents,
+  importStudents,
+  parseCreateStudentRequest,
+  parseImportStudentsRequest,
+  parseUpdateStudentRequest,
+  removeStudent,
+} from '../admin/students.service.js';
+import { isGradeLevel } from '../grades.js';
+import { parsePageRequest, queryString } from '../pagination.js';
 import { ApiError } from '../middleware/errorHandler.js';
 import { requireAuth } from '../middleware/requireAuth.js';
 import {
@@ -14,24 +26,75 @@ export const adminRouter = Router();
 // Every route below requires a signed-in teacher.
 adminRouter.use(requireAuth('TEACHER'));
 
-/** GET /api/admin/students */
-adminRouter.get('/students', (_req, res, next) => {
-  void getAllStudents()
-    .then((students) => {
-      const body: ApiResponse<StudentAccount[]> = { success: true, data: students };
-      res.json(body);
-    })
-    .catch(next);
+/** GET /api/admin/students?page=&limit=&q=&section=&status=  — or ?export=gradebook for a CSV */
+adminRouter.get('/students', async (req, res, next) => {
+  try {
+    if (req.query.export === 'gradebook') {
+      res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+      res.setHeader('Content-Disposition', 'attachment; filename="salita-gradebook.csv"');
+      res.setHeader('Cache-Control', 'private, no-store');
+      res.send(await buildGradebookCsv());
+      return;
+    }
+    const paging = parsePageRequest(req.query);
+    const section = queryString(req.query, 'section', 20);
+    const status = queryString(req.query, 'status', 10);
+    const { items, total } = await getAllStudents({
+      skip: paging.skip,
+      limit: paging.limit,
+      q: queryString(req.query, 'q', 80),
+      ...(section && isGradeLevel(section) ? { section } : {}),
+      ...(status === 'ACTIVE' || status === 'INACTIVE' ? { status } : {}),
+    });
+    const body: ApiResponse<StudentAccount[]> = {
+      success: true,
+      data: items,
+      meta: { total, page: paging.page, limit: paging.limit },
+    };
+    res.json(body);
+  } catch (err) {
+    next(err);
+  }
 });
 
-/** GET /api/admin/submissions */
-adminRouter.get('/submissions', (_req, res, next) => {
-  void getAllSubmissions()
-    .then((submissions) => {
-      const body: ApiResponse<SubmissionRecord[]> = { success: true, data: submissions };
-      res.json(body);
-    })
-    .catch(next);
+/** POST /api/admin/students?action=import  { students: [...] } — up to 10 rows per request. */
+adminRouter.post('/students', async (req, res, next) => {
+  if (req.query.action !== 'import') {
+    next();
+    return;
+  }
+  try {
+    const rows = parseImportStudentsRequest(req.body);
+    if (!rows) throw new ApiError(400, 'Send between 1 and 10 students per import request.');
+    const body: ApiResponse<ImportStudentResult[]> = { success: true, data: await importStudents(rows) };
+    res.json(body);
+  } catch (err) {
+    next(err);
+  }
+});
+
+/** GET /api/admin/submissions?page=&limit=&status=&taskType=&taskId= */
+adminRouter.get('/submissions', async (req, res, next) => {
+  try {
+    const paging = parsePageRequest(req.query);
+    const status = queryString(req.query, 'status');
+    const taskType = queryString(req.query, 'taskType');
+    const { items, total } = await getAllSubmissions({
+      skip: paging.skip,
+      limit: paging.limit,
+      ...(status === 'PENDING' || status === 'GRADED' ? { status } : {}),
+      ...(taskType === 'ACTIVITY' || taskType === 'PERFORMANCE_TASK' ? { taskType } : {}),
+      taskId: queryString(req.query, 'taskId', 60),
+    });
+    const body: ApiResponse<SubmissionRecord[]> = {
+      success: true,
+      data: items,
+      meta: { total, page: paging.page, limit: paging.limit },
+    };
+    res.json(body);
+  } catch (err) {
+    next(err);
+  }
 });
 
 /** PUT /api/admin/submissions/:id */

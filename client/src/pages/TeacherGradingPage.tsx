@@ -9,8 +9,11 @@ import { ChartIcon, ChevronRightIcon, ClipboardCheckIcon, QuizIcon, TargetIcon }
 import { LIMITS } from '../lib/limits';
 import { EmptyState } from '../components/ui/EmptyState';
 import { useAuth } from '../auth/AuthContext';
-import { fetchAllSubmissions, fetchTasks, gradeSubmission } from '../api/tasks';
+import { downloadAttachment, fetchSubmissionPage, fetchTasks, gradeSubmission } from '../api/tasks';
 import { fetchQuizResults } from '../api/quizzes';
+import { ApiRequestError, saveBlob } from '../api/client';
+import { Notice } from '../components/ui/Notice';
+import { DownloadIcon, PaperclipIcon } from '../components/common/icons';
 
 type GradingTab = 'activities' | 'performance' | 'quizzes';
 
@@ -21,72 +24,101 @@ interface DraftState {
   };
 }
 
+interface Listing<T> {
+  items: T[];
+  total: number;
+  page: number;
+}
+
+const EMPTY_LISTING = { items: [], total: 0, page: 1 } as const;
+const TAB_TASK_TYPE: Record<'activities' | 'performance', TaskType> = { activities: 'ACTIVITY', performance: 'PERFORMANCE_TASK' };
+
+/** Newest page first, then anything older that was already loaded with "Load more". */
+function mergeFirstPage<T extends { id: string }>(fresh: T[], existing: T[]): T[] {
+  const freshIds = new Set(fresh.map((item) => item.id));
+  return [...fresh, ...existing.filter((item) => !freshIds.has(item.id))];
+}
+
 export function TeacherGradingPage() {
   const { session } = useAuth();
   const [tasks, setTasks] = useState<ActivityTask[]>([]);
-  const [submissions, setSubmissions] = useState<SubmissionRecord[]>([]);
-  const [quizAttempts, setQuizAttempts] = useState<QuizAttemptRecord[]>([]);
+  const [activities, setActivities] = useState<Listing<SubmissionRecord>>({ ...EMPTY_LISTING, items: [] });
+  const [performance, setPerformance] = useState<Listing<SubmissionRecord>>({ ...EMPTY_LISTING, items: [] });
+  const [quizAttempts, setQuizAttempts] = useState<Listing<QuizAttemptRecord>>({ ...EMPTY_LISTING, items: [] });
+  const [pending, setPending] = useState({ activities: 0, performance: 0 });
   const [drafts, setDrafts] = useState<DraftState>({});
   const [error, setError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [savingId, setSavingId] = useState<string | null>(null);
   const [expandedSubmissionId, setExpandedSubmissionId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<GradingTab>('activities');
-  const submissionsRef = useRef<SubmissionRecord[]>([]);
+  const knownRef = useRef<Map<string, SubmissionRecord>>(new Map());
+  const refreshRef = useRef<(isRefresh: boolean) => Promise<void>>(async () => undefined);
 
   const taskLookup = useMemo(
     () => new Map(tasks.map((task) => [task.id, task])),
     [tasks],
   );
 
+  /** Keeps what the teacher is typing, unless the student has submitted again since it was loaded. */
+  const syncDrafts = (incoming: SubmissionRecord[], isRefresh: boolean) => {
+    setDrafts((current) => {
+      const next: DraftState = { ...current };
+      for (const submission of incoming) {
+        const before = knownRef.current.get(submission.id);
+        const unchanged = before && before.submittedAt === submission.submittedAt && before.status === submission.status;
+        if (!(isRefresh && unchanged && current[submission.id])) {
+          next[submission.id] = { grade: submission.grade?.toString() ?? '', feedback: submission.feedback ?? '' };
+        }
+        knownRef.current.set(submission.id, submission);
+      }
+      return next;
+    });
+  };
+
   useEffect(() => {
-    const token = session?.token;
-    if (!token) {
+    if (!session) {
       setIsLoading(false);
       return;
     }
-
-    const safeToken = token;
     let active = true;
 
+    // Loads page 1 of whatever tab is open, plus the "to grade" counts for the tab badges.
     async function load(isRefresh: boolean) {
       try {
-        const [taskList, submissionList, quizResultList] = await Promise.all([
-          fetchTasks(safeToken),
-          fetchAllSubmissions(safeToken),
-          fetchQuizResults(safeToken),
+        const tab = activeTabRef.current;
+        const [taskList, activityPending, performancePending] = await Promise.all([
+          fetchTasks(),
+          fetchSubmissionPage({ taskType: 'ACTIVITY', status: 'PENDING', limit: 1 }),
+          fetchSubmissionPage({ taskType: 'PERFORMANCE_TASK', status: 'PENDING', limit: 1 }),
         ]);
-
         if (!active) return;
-        const previous = new Map(submissionsRef.current.map((item) => [item.id, item]));
-        submissionsRef.current = submissionList;
         setTasks(taskList);
-        setSubmissions(submissionList);
-        setQuizAttempts(quizResultList);
-        setDrafts((current) => {
-          const next: DraftState = {};
-          for (const submission of submissionList) {
-            const before = previous.get(submission.id);
-            // Keep what the teacher is typing, unless the student has submitted again since.
-            const unchanged = before && before.submittedAt === submission.submittedAt && before.status === submission.status;
-            next[submission.id] =
-              isRefresh && unchanged && current[submission.id]
-                ? current[submission.id]
-                : { grade: submission.grade?.toString() ?? '', feedback: submission.feedback ?? '' };
-          }
-          return next;
-        });
+        setPending({ activities: activityPending.meta.total, performance: performancePending.meta.total });
+
+        if (tab === 'quizzes') {
+          const page = await fetchQuizResults(1, 50);
+          if (!active) return;
+          setQuizAttempts((current) => ({ items: mergeFirstPage(page.items, current.items), total: page.meta.total, page: current.page }));
+        } else {
+          const page = await fetchSubmissionPage({ taskType: TAB_TASK_TYPE[tab], limit: 50 });
+          if (!active) return;
+          const setter = tab === 'activities' ? setActivities : setPerformance;
+          setter((current) => ({ items: mergeFirstPage(page.items, current.items), total: page.meta.total, page: current.page }));
+          syncDrafts(page.items, isRefresh);
+        }
         setError(null);
       } catch (err) {
         if (!active) return;
         // A failed background refresh keeps showing what we have; only the first load reports an error.
         if (!isRefresh) setError(err instanceof Error ? err.message : 'Could not load submissions.');
       } finally {
-        if (active) {
-          setIsLoading(false);
-        }
+        if (active) setIsLoading(false);
       }
     }
+    refreshRef.current = load;
 
     void load(false);
 
@@ -102,7 +134,45 @@ export function TeacherGradingPage() {
       window.clearInterval(interval);
       document.removeEventListener('visibilitychange', refreshWhenVisible);
     };
-  }, [session?.token]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session?.user.id]);
+
+  const activeTabRef = useRef<GradingTab>('activities');
+  const changeTab = (tab: GradingTab) => {
+    activeTabRef.current = tab;
+    setActiveTab(tab);
+    setActionError(null);
+    void refreshRef.current(false);
+  };
+
+  const loadMore = async () => {
+    setIsLoadingMore(true);
+    setActionError(null);
+    try {
+      if (activeTab === 'quizzes') {
+        const page = await fetchQuizResults(quizAttempts.page + 1, 50);
+        setQuizAttempts((current) => ({
+          items: [...current.items, ...page.items.filter((item) => !current.items.some((existing) => existing.id === item.id))],
+          total: page.meta.total,
+          page: current.page + 1,
+        }));
+      } else {
+        const listing = activeTab === 'activities' ? activities : performance;
+        const page = await fetchSubmissionPage({ taskType: TAB_TASK_TYPE[activeTab], page: listing.page + 1, limit: 50 });
+        const setter = activeTab === 'activities' ? setActivities : setPerformance;
+        setter((current) => ({
+          items: [...current.items, ...page.items.filter((item) => !current.items.some((existing) => existing.id === item.id))],
+          total: page.meta.total,
+          page: current.page + 1,
+        }));
+        syncDrafts(page.items, false);
+      }
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : 'Could not load more.');
+    } finally {
+      setIsLoadingMore(false);
+    }
+  };
 
   const handleDraftChange = (submissionId: string, field: 'grade' | 'feedback', value: string) => {
     setDrafts((current) => ({
@@ -116,7 +186,7 @@ export function TeacherGradingPage() {
   };
 
   const handleSave = async (submission: SubmissionRecord) => {
-    if (!session?.token) return;
+    if (!session) return;
 
     const task = taskLookup.get(submission.taskId);
     const draft = drafts[submission.id] ?? {
@@ -125,52 +195,62 @@ export function TeacherGradingPage() {
     };
 
     const nextGrade = Number(draft.grade);
-    if (!Number.isFinite(nextGrade) || nextGrade < 0 || (task && nextGrade > task.totalPoints)) {
-      setError(task ? `Grade must be between 0 and ${task.totalPoints}.` : 'Enter a valid grade.');
+    if (draft.grade.trim() === '' || !Number.isFinite(nextGrade) || nextGrade < 0 || (task && nextGrade > task.totalPoints)) {
+      setActionError(task ? `Grade must be between 0 and ${task.totalPoints}.` : 'Enter a valid grade.');
       return;
     }
 
     setSavingId(submission.id);
-    setError(null);
+    setActionError(null);
 
     try {
-      const updated = await gradeSubmission(
-        submission.id,
-        {
-          grade: nextGrade,
-          feedback: draft.feedback.trim() || undefined,
-        },
-        session.token,
-      );
+      const updated = await gradeSubmission(submission.id, {
+        grade: nextGrade,
+        feedback: draft.feedback.trim() || undefined,
+        // Lets the server refuse the save if the student resubmitted while this was open.
+        expectedSubmittedAt: submission.submittedAt,
+      });
 
-      setSubmissions((current) =>
-        current.map((item) => (item.id === updated.id ? updated : item)),
-      );
+      const replace = (current: Listing<SubmissionRecord>) => ({
+        ...current,
+        items: current.items.map((item) => (item.id === updated.id ? updated : item)),
+      });
+      setActivities(replace);
+      setPerformance(replace);
+      knownRef.current.set(updated.id, updated);
       setDrafts((current) => ({
         ...current,
-        [submission.id]: {
-          grade: updated.grade?.toString() ?? '',
-          feedback: updated.feedback ?? '',
-        },
+        [submission.id]: { grade: updated.grade?.toString() ?? '', feedback: updated.feedback ?? '' },
       }));
+      void refreshRef.current(true);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not save the grade.');
+      setActionError(err instanceof Error ? err.message : 'Could not save the grade.');
+      // A conflict means the work changed: reload so the new version (and a fresh draft) is shown.
+      if (err instanceof ApiRequestError && err.status === 409) void refreshRef.current(false);
     } finally {
       setSavingId(null);
     }
   };
 
-  const typeOf = (submission: SubmissionRecord): TaskType => taskLookup.get(submission.taskId)?.type ?? 'ACTIVITY';
-  const activitySubmissions = submissions.filter((item) => typeOf(item) === 'ACTIVITY');
-  const performanceSubmissions = submissions.filter((item) => typeOf(item) === 'PERFORMANCE_TASK');
-  const needsGrading = (items: SubmissionRecord[]) => items.filter((item) => item.status !== 'GRADED').length;
+  const handleDownload = async (submission: SubmissionRecord) => {
+    if (!submission.attachment) return;
+    setActionError(null);
+    try {
+      saveBlob(await downloadAttachment(submission.attachment.id), submission.attachment.fileName);
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : 'Could not download that file.');
+    }
+  };
+
+  const needsGrading = pending;
 
   const tabs = [
-    { id: 'activities', label: 'Activities', icon: ClipboardCheckIcon, count: activitySubmissions.length, pending: needsGrading(activitySubmissions) },
-    { id: 'performance', label: 'Performance tasks', icon: TargetIcon, count: performanceSubmissions.length, pending: needsGrading(performanceSubmissions) },
-    { id: 'quizzes', label: 'Quizzes', icon: QuizIcon, count: quizAttempts.length, pending: 0 },
+    { id: 'activities', label: 'Activities', icon: ClipboardCheckIcon, count: activities.total, pending: needsGrading.activities },
+    { id: 'performance', label: 'Performance tasks', icon: TargetIcon, count: performance.total, pending: needsGrading.performance },
+    { id: 'quizzes', label: 'Quizzes', icon: QuizIcon, count: quizAttempts.total, pending: 0 },
   ] as const;
-  const visibleSubmissions = activeTab === 'activities' ? activitySubmissions : performanceSubmissions;
+  const activeListing = activeTab === 'activities' ? activities : performance;
+  const visibleSubmissions = activeListing.items;
   const tabNoun = activeTab === 'activities' ? 'activity' : 'performance task';
 
   return (
@@ -189,7 +269,7 @@ export function TeacherGradingPage() {
               type="button"
               role="tab"
               aria-selected={isActive}
-              onClick={() => setActiveTab(id)}
+              onClick={() => changeTab(id)}
               className={`-mb-px flex flex-none items-center gap-2 border-b-2 px-4 py-3 text-sm font-medium transition-colors ${
                 isActive ? 'border-gold text-parchment' : 'border-transparent text-muted hover:text-parchment'
               }`}
@@ -201,6 +281,8 @@ export function TeacherGradingPage() {
           );
         })}
       </div>
+
+      {actionError && <Notice tone="error" className="mb-6">{actionError}</Notice>}
 
       <div key={activeTab} className="animate-fade-in-up">
         {activeTab !== 'quizzes' && (
@@ -246,6 +328,8 @@ export function TeacherGradingPage() {
                                 {submission.status === 'GRADED' ? 'Graded' : 'Needs grading'}
                               </span>
                               {submission.resubmitted && <span className="badge-clay ml-1.5 mt-1">Resubmitted</span>}
+                              {submission.late && <span className="badge-clay ml-1.5 mt-1">Late</span>}
+                              {submission.attachment && <span className="badge-neutral ml-1.5 mt-1"><PaperclipIcon className="h-3 w-3" />File</span>}
                             </div>
                           </div>
                         </td>
@@ -312,6 +396,11 @@ export function TeacherGradingPage() {
                             <div className="mt-2 whitespace-pre-wrap rounded-xl border border-night-border bg-night-panel p-4 text-sm leading-6 text-parchment">
                               {submission.submittedContent || 'No submission text was provided.'}
                             </div>
+                            {submission.attachment && (
+                              <button type="button" className="btn-secondary btn-sm mt-3" onClick={() => void handleDownload(submission)}>
+                                <DownloadIcon className="h-3.5 w-3.5" /> {submission.attachment.fileName}
+                              </button>
+                            )}
                           </td>
                         </tr>
                       )}
@@ -321,6 +410,14 @@ export function TeacherGradingPage() {
               </tbody>
             </table>
           </div>
+          {visibleSubmissions.length < activeListing.total && (
+            <div className="flex items-center justify-between gap-3 border-t border-night-border px-4 py-3 text-sm text-muted">
+              <span>Showing {visibleSubmissions.length} of {activeListing.total}</span>
+              <button type="button" className="btn-secondary btn-sm" disabled={isLoadingMore} onClick={() => void loadMore()}>
+                {isLoadingMore ? 'Loading…' : 'Load more'}
+              </button>
+            </div>
+          )}
         </div>
       )}
           </>
@@ -332,7 +429,7 @@ export function TeacherGradingPage() {
         </h2>
         <p className="mt-1 text-sm text-muted">Scores are calculated on the server when students submit.</p>
         <div className="mt-5">
-          {quizAttempts.length === 0 ? (
+          {quizAttempts.items.length === 0 ? (
             <EmptyState icon={<ChartIcon />} title="No quiz attempts yet" description="Results appear here as students complete quizzes." />
           ) : (
             <div className="table-wrap overflow-x-auto">
@@ -346,7 +443,7 @@ export function TeacherGradingPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {quizAttempts.map((attempt) => (
+                  {quizAttempts.items.map((attempt) => (
                     <tr key={attempt.id}>
                       <td className="font-medium text-parchment">{attempt.studentName}</td>
                       <td className="text-parchment">{attempt.quizTitle}</td>
@@ -361,6 +458,14 @@ export function TeacherGradingPage() {
                   ))}
                 </tbody>
               </table>
+              {quizAttempts.items.length < quizAttempts.total && (
+                <div className="flex items-center justify-between gap-3 border-t border-night-border px-4 py-3 text-sm text-muted">
+                  <span>Showing {quizAttempts.items.length} of {quizAttempts.total}</span>
+                  <button type="button" className="btn-secondary btn-sm" disabled={isLoadingMore} onClick={() => void loadMore()}>
+                    {isLoadingMore ? 'Loading…' : 'Load more'}
+                  </button>
+                </div>
+              )}
             </div>
           )}
         </div>

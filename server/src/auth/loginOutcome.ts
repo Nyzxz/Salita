@@ -1,11 +1,14 @@
 import type { ApiResponse, AuthSession } from '../../../shared/src/types.js';
 import type { LoginOutcome } from './auth.service.js';
+import { toCookieSession } from './sessionResponse.js';
 
 export interface LoginHttpResult {
   status: number;
   body: ApiResponse<AuthSession | null>;
   /** Seconds for a Retry-After header, when throttled. */
   retryAfterSeconds?: number;
+  /** Set-Cookie header value carrying the session token (never put in the body). */
+  setCookie?: string;
 }
 
 /**
@@ -19,8 +22,10 @@ export const GENERIC_LOGIN_ERROR =
 /** One place that turns a login outcome into an HTTP status + message. */
 export function loginOutcomeToHttp(outcome: LoginOutcome): LoginHttpResult {
   switch (outcome.status) {
-    case 'success':
-      return { status: 200, body: { success: true, data: outcome.session } };
+    case 'success': {
+      const { session, setCookie } = toCookieSession(outcome.session);
+      return { status: 200, setCookie, body: { success: true, data: session } };
+    }
     case 'rate_limited': {
       const minutes = Math.max(1, Math.ceil(outcome.retryAfterSeconds / 60));
       return {

@@ -1,11 +1,11 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import type { ApiResponse, StudentAccount } from '../../../../shared/src/types.js';
-import { getUserFromAuthHeader } from '../../../../server/src/auth/auth.service.js';
+import { getUserFromRequest } from '../../../../server/src/auth/auth.service.js';
 import { editStudent, parseUpdateStudentRequest, removeStudent } from '../../../../server/src/admin/students.service.js';
 
 // Vercel equivalent of PUT and DELETE /api/admin/students/:id in server/src/routes/admin.routes.ts.
 export default async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
-  const user = await getUserFromAuthHeader(req.headers.authorization);
+  const user = await getUserFromRequest(req);
   if (!user) {
     res.status(401).json({ success: false, data: null, error: 'You need to sign in to do that.' });
     return;
