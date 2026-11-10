@@ -107,16 +107,18 @@ npm run format          # Prettier, writes in place
 
 ## Roles
 
-**Students** sign in to a six-tab dashboard (`/dashboard/student`):
+**Students** sign in to a dashboard (`/dashboard/student`) with a menu on the left (a scrolling strip on phones). The Dashboard shows a short summary only; each other button opens just its own section:
 
 | Tab | What it shows |
 | --- | --- |
+| Dashboard | Summary cards: quizzes, activities and performance tasks still to do, and graded work |
 | Lectures | Teacher-written lectures for their grade, plus the vocabulary explorer |
-| Quizzes | Teacher quizzes (timed, with due dates and attempt limits, answer review afterwards) and the practice flashcards/quiz |
+| Quizzes | Teacher quizzes (timed, optional due date, shuffled order; one attempt, with the answers reviewed automatically afterwards) and the practice flashcards/quiz |
 | Activities | `ACTIVITY` tasks, each with a submission box |
 | Performance Tasks | `PERFORMANCE_TASK` tasks, with an optional file attachment |
 | My Grades | Everything submitted, with score and feedback once graded |
-| Profile | Edit name/email and change password |
+
+The student's initials (top right) open a menu with **Profile management** (edit name/email) and **Log out**. Students cannot change their own password after the first sign-in; the teacher resets it.
 
 New or reset accounts must change their default password before anything else
 works (enforced on the server, not just the UI). A notification bell shows new
@@ -128,15 +130,20 @@ content, grades and feedback. Students only see content for their own grade
 - **User management** — create students (an automatic default password is
   suggested), import a class from CSV, search and filter the directory, reset
   passwords, deactivate/reactivate, and delete accounts (which also removes
-  their submissions and quiz results). Grades are limited to Grade 7–12.
+  their submissions and quiz results). Grades are limited to Grade 7–12. Each grade can be split into **class sections** (for example “Sampaguita”) that the teacher creates; picking a section is optional when adding a student, the CSV import accepts an optional `section` column, and the directory can be filtered by section.
 - **Content studio** — write lectures, build quizzes, and set activities and
   performance tasks, each aimed at a grade level. Everything published can be
-  edited or deleted afterwards. Quizzes support a time limit, a closing date, an
-  attempt limit, and a switch for whether students may review correct answers.
+  edited or deleted afterwards. Quizzes support a time limit, a closing date and
+  an option to shuffle questions and answer choices per student.
+  Every student gets **one attempt** and sees the correct answers right after
+  submitting. They cannot retake it themselves.
 - **Grading center** — Activities, Performance tasks and Quizzes tabs, paged 50
   at a time and refreshed every ten seconds while the tab is visible. Late and
   resubmitted work is flagged, attachments can be downloaded, and a grade is
-  refused if the student resubmitted while the teacher was grading.
+  refused if the student resubmitted while the teacher was grading. In the
+  Quizzes tab the teacher ticks one or more students and presses **Allow
+  retake**; that student can then take the quiz once more, and the retake score
+  loses a random 1–5 percentage points.
 - **Class analytics** — per-quiz averages, question-by-question analysis (which
   questions the class misses), per-student progress, and a gradebook CSV export.
 
@@ -175,7 +182,7 @@ trusted frontend origins.
 - File attachments (performance tasks only): PDF, PNG, JPG, DOCX or TXT, up to
   1 MB, checked by their real contents, stored in MongoDB, and served with
   download-only headers.
-- Quiz time limits and attempt limits are enforced on the server, not the page.
+- Quiz time limits, the one-attempt rule, retake unlocks and the retake penalty are enforced on the server, not the page. Shuffling happens in the browser and never affects scoring.
 - Express applies request throttling, Helmet headers and a JSON body limit.
   Vercel adds browser security headers, but its serverless functions do not run
   Express middleware.
@@ -193,8 +200,8 @@ rewrites in `client/vercel.json` instead of adding files:
 | `api/tasks.ts` | `/api/content/lectures`, `/api/content/tasks` (and `/:id` for edit/delete) |
 | `api/quiz.ts` | `/api/quizzes/*` (start, submit, results, analytics, edit/delete) |
 | `api/submissions.ts` | `/api/submissions/me`, file upload and download |
-| `api/auth/me.ts` | profile, password change, logout, notifications |
-| `api/admin/students.ts` | CSV import (`?action=import`), gradebook export (`?export=gradebook`) |
+| `api/auth/me.ts` | profile, password change, logout, notifications, live updates (`?action=events`, `maxDuration` 60 in `vercel.json`) |
+| `api/admin/students.ts` | CSV import (`?action=import`), gradebook export (`?export=gradebook`), class sections (`?resource=sections`) |
 
 ## API reference
 
@@ -218,9 +225,10 @@ cookie.
 | POST / PUT / DELETE | `/api/content/tasks[/:id]` | Create, edit, delete. Teacher. |
 | GET | `/api/quizzes` | Quizzes (teachers also receive correct answers, for editing). |
 | POST / PUT / DELETE | `/api/quizzes[/:id]` | Create, edit, delete. Teacher. |
-| POST | `/api/quizzes/:id/start` | Open a quiz (starts the clock; checks due date and attempts). Student. |
-| POST | `/api/quizzes/:id/submit` | Submit answers; returns the score and, if allowed, the review. Student. |
-| GET | `/api/quizzes/attempts/me` | Own attempts, with review where allowed. Student. |
+| POST | `/api/quizzes/:id/start` | Open a quiz (starts the clock; checks the due date and that the student has no attempt yet, or an unlocked retake). Student. |
+| POST | `/api/quizzes/:id/retakes` | Unlock a retake `{ studentIds }` for students who already took it. Teacher. |
+| POST | `/api/quizzes/:id/submit` | Submit answers; returns the score and the answer review (with `penaltyPercent` on a retake). Student. |
+| GET | `/api/quizzes/attempts/me` | Own attempts, with review. Student. |
 | GET | `/api/quizzes/results` | All attempts, paged. Teacher. |
 | GET | `/api/quizzes/analytics` | Class and per-student analytics. Teacher. |
 | GET | `/api/submissions/me` | Own submissions. Student. |
@@ -229,8 +237,10 @@ cookie.
 | GET | `/api/submissions?route=attachment&id=` | Download a file (its owner or a teacher). |
 | GET | `/api/admin/submissions` | Submissions, paged; `status`, `taskType`, `taskId` filters. Teacher. |
 | PUT | `/api/admin/submissions/:id` | Grade `{ grade, feedback?, expectedSubmittedAt? }`; 409 if the work changed. Teacher. |
-| GET | `/api/admin/students` | Directory, paged; `q`, `section`, `status` filters. `?export=gradebook` returns a CSV. Teacher. |
+| GET | `/api/admin/students` | Directory, paged; `q`, `section` (grade), `classSection`, `status` filters. `?export=gradebook` returns a CSV. Teacher. |
 | POST | `/api/admin/students` | Create a student. `?action=import` creates up to 10 from CSV rows. Teacher. |
+| GET / POST / DELETE | `/api/admin/students?resource=sections` | List, add `{ grade, name }`, remove (`&id=`) class sections. Teacher. |
+| GET | `/api/auth/me?action=events` | Server-sent events: tells the browser when new notifications arrive so screens refresh (each connection lasts about 50 s, then the browser reconnects; polling continues as a fallback). |
 | PUT / DELETE | `/api/admin/students/:id` | Update details, reset password, change status / delete. Teacher. |
 
 ## Tests and CI

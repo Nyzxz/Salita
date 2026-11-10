@@ -13,6 +13,7 @@ import {
   listNotifications,
   markNotificationsRead,
   parseMarkReadRequest,
+  streamNotificationEvents,
 } from '../../../server/src/notifications/notifications.service.js';
 
 function fail(res: VercelResponse, status: number, error: string): void {
@@ -26,6 +27,7 @@ function fail(res: VercelResponse, status: number, error: string): void {
  * POST /api/auth/me?action=password          — change my password (sets a fresh session cookie)
  * POST /api/auth/me?action=logout            — end my session (clears the cookie)
  * GET  /api/auth/me?action=notifications     — my notifications and unread count
+ * GET  /api/auth/me?action=events            — live update stream (server-sent events, ~50 s per connection)
  * POST /api/auth/me?action=notifications-read — mark notifications read ({ ids } or { all: true })
  * (One function for all of these keeps the project inside Vercel's 12-function limit.)
  */
@@ -45,6 +47,27 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
 
   if (!user) {
     fail(res, 401, 'You need to sign in to do that.');
+    return;
+  }
+
+  // Live updates: a short-lived event stream. The browser reconnects when it ends.
+  if (req.method === 'GET' && req.query.action === 'events') {
+    res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
+    res.setHeader('Cache-Control', 'no-cache, no-transform');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no');
+    res.status(200);
+    let closed = false;
+    req.on('close', () => {
+      closed = true;
+    });
+    await streamNotificationEvents(user.id, {
+      write: (chunk) => {
+        res.write(chunk);
+      },
+      isClosed: () => closed,
+    });
+    res.end();
     return;
   }
 

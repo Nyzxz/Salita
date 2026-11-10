@@ -226,8 +226,7 @@ function QuizBuilder() {
   const [description, setDescription] = useState('');
   const [timeLimit, setTimeLimit] = useState('');
   const [dueDate, setDueDate] = useState('');
-  const [maxAttempts, setMaxAttempts] = useState('');
-  const [showAnswers, setShowAnswers] = useState(true);
+  const [randomize, setRandomize] = useState(true);
   const [gradeLevel, setGradeLevel] = useState<ContentGrade | ''>('');
   const [questions, setQuestions] = useState<DraftQuestion[]>([emptyQuestion()]);
   const [isSaving, setIsSaving] = useState(false);
@@ -249,8 +248,7 @@ function QuizBuilder() {
     setDescription('');
     setTimeLimit('');
     setDueDate('');
-    setMaxAttempts('');
-    setShowAnswers(true);
+    setRandomize(true);
     setGradeLevel('');
     setQuestions([emptyQuestion()]);
   };
@@ -265,8 +263,7 @@ function QuizBuilder() {
     setDescription(quiz.description);
     setTimeLimit(quiz.timeLimitMinutes ? String(quiz.timeLimitMinutes) : '');
     setDueDate(toLocalInput(quiz.dueDate));
-    setMaxAttempts(quiz.maxAttempts ? String(quiz.maxAttempts) : '');
-    setShowAnswers(quiz.showAnswers);
+    setRandomize(quiz.randomize);
     setGradeLevel(quiz.gradeLevel);
     setQuestions(
       quiz.questions.map((question) => ({
@@ -305,8 +302,7 @@ function QuizBuilder() {
         gradeLevel,
         ...(timeLimit ? { timeLimitMinutes: Number(timeLimit) } : {}),
         ...(dueDate ? { dueDate: new Date(dueDate).toISOString() } : {}),
-        ...(maxAttempts ? { maxAttempts: Number(maxAttempts) } : {}),
-        showAnswers,
+        randomize,
         questions,
       };
       const saved = editingId ? await updateQuiz(editingId, payload) : await createQuiz(payload);
@@ -349,17 +345,17 @@ function QuizBuilder() {
               <Field label="Closes on (optional)">
                 <input type="datetime-local" value={dueDate} onChange={(event) => setDueDate(event.target.value)} className="field" />
               </Field>
-              <Field label="Attempts per student (optional)">
-                <input type="number" min={1} max={50} step={1} value={maxAttempts} onChange={(event) => setMaxAttempts(event.target.value)} className="field" placeholder="Unlimited" />
-              </Field>
             </div>
             <label className="flex items-start gap-3 text-sm text-parchment">
-              <input type="checkbox" checked={showAnswers} onChange={(event) => setShowAnswers(event.target.checked)} className="mt-0.5 accent-gold" />
+              <input type="checkbox" checked={randomize} onChange={(event) => setRandomize(event.target.checked)} className="mt-0.5 accent-gold" />
               <span>
-                Let students review the correct answers after submitting
-                <span className="block text-xs text-muted">Turn this off if students may retake the quiz and you don’t want answers shared.</span>
+                Shuffle questions and answer choices for each student
+                <span className="block text-xs text-muted">Each student sees a different order, which makes copying harder.</span>
               </span>
             </label>
+            <p className="rounded-xl border border-white/10 bg-white/[0.03] p-3 text-xs leading-relaxed text-muted">
+              Each student gets one attempt and sees their results with the correct answers right after submitting. To let a student retake it, open the Grading Center, choose the student(s) and press “Allow retake” — a retake loses a random 1–5%.
+            </p>
           </div>
 
           {questions.map((question, questionIndex) => (
@@ -420,7 +416,7 @@ function QuizBuilder() {
         items={quizzes.map((quiz) => ({
           id: quiz.id,
           title: quiz.title,
-          detail: `${quiz.questions.length} questions${quiz.maxAttempts ? ` · ${quiz.maxAttempts} attempt${quiz.maxAttempts === 1 ? '' : 's'}` : ''}${quiz.dueDate ? ` · closes ${new Date(quiz.dueDate).toLocaleDateString()}` : ''}`,
+          detail: `${quiz.questions.length} questions${quiz.randomize ? ' · shuffled' : ''}${quiz.dueDate ? ` · closes ${new Date(quiz.dueDate).toLocaleDateString()}` : ''}`,
           grade: quiz.gradeLevel,
         }))}
         isLoading={isLoading}

@@ -38,6 +38,11 @@ export function submitQuizAttempt(
   return apiPost<QuizAttemptRecord>(`/api/quizzes/${encodeURIComponent(quizId)}/submit`, request, token);
 }
 
+/** Teacher: let these students retake the quiz (each retake loses a random 1–5%). */
+export function grantRetakes(quizId: string, studentIds: string[]): Promise<{ granted: number }> {
+  return apiPost<{ granted: number }>(`/api/quizzes/${encodeURIComponent(quizId)}/retakes`, { studentIds });
+}
+
 export function fetchMyQuizAttempts(token?: string): Promise<QuizAttemptRecord[]> {
   return apiGet<QuizAttemptRecord[]>('/api/quizzes/attempts/me', undefined, token);
 }

@@ -5,7 +5,6 @@ import { useAuth } from '../../auth/AuthContext';
 import { Avatar } from '../common/Avatar';
 import { PageIntro } from '../ui/PageIntro';
 import { Notice } from '../ui/Notice';
-import { ChangePasswordForm } from './ChangePasswordForm';
 
 export function ProfileSection() {
   const { session, updateUser } = useAuth();
@@ -15,7 +14,6 @@ export function ProfileSection() {
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
-  const [passwordChanged, setPasswordChanged] = useState(false);
 
   if (!user || !session) return null;
 
@@ -45,7 +43,7 @@ export function ProfileSection() {
         id="profile-heading"
         eyebrow="Account"
         title="My profile"
-        description="Keep your details up to date and manage how you sign in."
+        description="Keep your contact details up to date."
       />
 
       <div className="surface flex flex-wrap items-center gap-5 p-6">
@@ -60,7 +58,7 @@ export function ProfileSection() {
         </div>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-2">
+      <div className="max-w-2xl">
         <form onSubmit={handleSave} className="surface flex flex-col gap-5 p-6" aria-labelledby="details-heading">
           <div>
             <h3 id="details-heading" className="text-lg font-semibold text-parchment">Personal details</h3>
@@ -94,14 +92,6 @@ export function ProfileSection() {
           </button>
         </form>
 
-        <div className="surface flex flex-col gap-5 p-6">
-          <div>
-            <h3 className="text-lg font-semibold text-parchment">Change password</h3>
-            <p className="mt-1 text-sm text-muted">Use a password you don’t use anywhere else.</p>
-          </div>
-          {passwordChanged && <Notice tone="success">Password updated. Use it the next time you sign in.</Notice>}
-          <ChangePasswordForm onChanged={() => setPasswordChanged(true)} />
-        </div>
       </div>
     </section>
   );

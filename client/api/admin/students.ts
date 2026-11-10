@@ -9,6 +9,7 @@ import {
   parseCreateStudentRequest,
   parseImportStudentsRequest,
 } from '../../../server/src/admin/students.service.js';
+import { createSection, deleteSection, listSections, parseCreateSectionRequest } from '../../../server/src/admin/sections.service.js';
 import { isGradeLevel } from '../../../server/src/grades.js';
 import { parsePageRequest, queryString } from '../../../server/src/pagination.js';
 
@@ -24,6 +25,40 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
     return;
   }
 
+  // Class sections live on this function too (Vercel Hobby function limit).
+  if (req.query.resource === 'sections') {
+    if (req.method === 'GET') {
+      res.status(200).json({ success: true, data: await listSections() });
+      return;
+    }
+    if (req.method === 'POST') {
+      const request = parseCreateSectionRequest(req.body);
+      if (!request) {
+        res.status(400).json({ success: false, data: null, error: 'Choose a grade and give the section a name (up to 40 characters).' });
+        return;
+      }
+      const result = await createSection(request);
+      if (!result.ok) {
+        res.status(result.status).json({ success: false, data: null, error: result.error });
+        return;
+      }
+      res.status(201).json({ success: true, data: result.data });
+      return;
+    }
+    if (req.method === 'DELETE') {
+      const result = await deleteSection(queryString(req.query, 'id', 40) ?? '');
+      if (!result.ok) {
+        res.status(result.status).json({ success: false, data: null, error: result.error });
+        return;
+      }
+      res.status(200).json({ success: true, data: result.data });
+      return;
+    }
+    res.setHeader('Allow', 'GET, POST, DELETE');
+    res.status(405).json({ success: false, data: null, error: `Method ${req.method} not allowed.` });
+    return;
+  }
+
   if (req.method === 'GET' && req.query.export === 'gradebook') {
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
     res.setHeader('Content-Disposition', 'attachment; filename="salita-gradebook.csv"');
@@ -35,12 +70,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
   if (req.method === 'GET') {
     const paging = parsePageRequest(req.query);
     const section = queryString(req.query, 'section', 20);
+    const classSection = queryString(req.query, 'classSection', 40);
     const status = queryString(req.query, 'status', 10);
     const { items, total } = await getAllStudents({
       skip: paging.skip,
       limit: paging.limit,
       q: queryString(req.query, 'q', 80),
       ...(section && isGradeLevel(section) ? { section } : {}),
+      ...(classSection ? { classSection } : {}),
       ...(status === 'ACTIVE' || status === 'INACTIVE' ? { status } : {}),
     });
     const body: ApiResponse<StudentAccount[]> = {

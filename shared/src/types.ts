@@ -107,10 +107,10 @@ export interface QuizContent {
   timeLimitMinutes?: number;
   /** ISO time after which the quiz can no longer be started or submitted. */
   dueDate?: string;
-  /** Most attempts each student may make; absent means unlimited. */
-  maxAttempts?: number;
-  /** Whether students see the correct answers after submitting. */
-  showAnswers: boolean;
+  /** Questions and answer choices are shuffled differently for each attempt. */
+  randomize: boolean;
+  /** Set for a student when their teacher has unlocked a retake for them. */
+  retakeOpen?: boolean;
   gradeLevel: ContentGrade;
   questions: QuizContentQuestion[];
   createdBy: string;
@@ -123,9 +123,13 @@ export interface CreateQuizRequest {
   gradeLevel: ContentGrade;
   timeLimitMinutes?: number;
   dueDate?: string;
-  maxAttempts?: number;
-  showAnswers?: boolean;
+  randomize?: boolean;
   questions: Array<QuizContentQuestion & { correctAnswerIndex: number }>;
+}
+
+/** Body of POST /api/quizzes/:id/retakes — unlock one more attempt for each listed student. */
+export interface GrantRetakesRequest {
+  studentIds: string[];
 }
 
 /** Editing a quiz replaces its settings and questions. */
@@ -166,8 +170,12 @@ export interface QuizAttemptRecord {
   percentageScore: number;
   feedback: string;
   completedAt: string;
-  /** Per-question review; sent only to the student who took it, and only when the quiz allows it. */
+  /** Per-question review, sent only to the student who took it. */
   review?: QuizReviewItem[];
+  /** Percentage points taken off this score because it was a retake (a random 1–5). */
+  penaltyPercent?: number;
+  /** Teacher's list only: this student currently has an unused retake unlocked. */
+  retakeOpen?: boolean;
 }
 
 export interface LectureRecord {
@@ -234,6 +242,8 @@ export interface User {
   email?: string;
   /** Students only: their grade level, e.g. "Grade 9". */
   section?: string;
+  /** Students only: their class section within the grade, if the teacher set one. */
+  classSection?: string;
   /** True until a student replaces the default password a teacher gave them. */
   mustChangePassword?: boolean;
 }
@@ -273,6 +283,8 @@ export interface StudentAccount {
   username: string;
   email: string;
   section: string;
+  /** Class section within the grade, like "Sampaguita" or "A". Optional. */
+  classSection?: string;
   createdAt: string;
   status: 'ACTIVE' | 'INACTIVE';
   /** True while the student still has the default password a teacher set. */
@@ -287,6 +299,8 @@ export interface CreateStudentRequest {
   password: string;
   /** One of GRADE_LEVELS. */
   section: GradeLevel;
+  /** Name of one of the teacher's sections for that grade. */
+  classSection?: string;
 }
 
 /**
@@ -297,8 +311,17 @@ export interface UpdateStudentRequest {
   fullName?: string;
   email?: string;
   section?: GradeLevel;
+  /** Empty string removes the student from their class section. */
+  classSection?: string;
   status?: StudentAccount['status'];
   password?: string;
+}
+
+/** A class section within a grade, made by the teacher. */
+export interface ClassSectionRecord {
+  id: string;
+  grade: GradeLevel;
+  name: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -380,6 +403,7 @@ export interface ImportStudentRow {
   username: string;
   email: string;
   section: GradeLevel;
+  classSection?: string;
 }
 
 export interface ImportStudentResult {
@@ -417,6 +441,7 @@ export interface StudentProgressItem {
   studentId: string;
   studentName: string;
   section: string;
+  classSection?: string;
   quizzesTaken: number;
   quizAveragePercent: number | null;
   tasksGraded: number;

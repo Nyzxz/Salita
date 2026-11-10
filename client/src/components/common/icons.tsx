@@ -301,3 +301,13 @@ export function EditIcon(props: IconProps) {
     </svg>
   );
 }
+
+export function HomeIcon(props: IconProps) {
+  return (
+    <svg {...base(props)}>
+      <path d="M4 11.5 12 5l8 6.5" />
+      <path d="M6 10v8.5A1.5 1.5 0 0 0 7.5 20h9a1.5 1.5 0 0 0 1.5-1.5V10" />
+      <path d="M10 20v-5h4v5" />
+    </svg>
+  );
+}

@@ -10,10 +10,11 @@ import { LIMITS } from '../lib/limits';
 import { EmptyState } from '../components/ui/EmptyState';
 import { useAuth } from '../auth/AuthContext';
 import { downloadAttachment, fetchSubmissionPage, fetchTasks, gradeSubmission } from '../api/tasks';
-import { fetchQuizResults } from '../api/quizzes';
+import { fetchQuizResults, grantRetakes } from '../api/quizzes';
 import { ApiRequestError, saveBlob } from '../api/client';
 import { Notice } from '../components/ui/Notice';
 import { DownloadIcon, PaperclipIcon } from '../components/common/icons';
+import { onLive, throttledWhenLive } from '../lib/live';
 
 type GradingTab = 'activities' | 'performance' | 'quizzes';
 
@@ -54,6 +55,9 @@ export function TeacherGradingPage() {
   const [savingId, setSavingId] = useState<string | null>(null);
   const [expandedSubmissionId, setExpandedSubmissionId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<GradingTab>('activities');
+  const [selectedAttempts, setSelectedAttempts] = useState<Set<string>>(new Set());
+  const [retakeNotice, setRetakeNotice] = useState<string | null>(null);
+  const [isGranting, setIsGranting] = useState(false);
   const knownRef = useRef<Map<string, SubmissionRecord>>(new Map());
   const refreshRef = useRef<(isRefresh: boolean) => Promise<void>>(async () => undefined);
 
@@ -126,16 +130,53 @@ export function TeacherGradingPage() {
     const refreshWhenVisible = () => {
       if (document.visibilityState === 'visible') void load(true);
     };
-    const interval = window.setInterval(refreshWhenVisible, 10_000);
+    const interval = window.setInterval(throttledWhenLive(refreshWhenVisible), 10_000);
     document.addEventListener('visibilitychange', refreshWhenVisible);
+    const stopLive = onLive(() => void load(true));
 
     return () => {
       active = false;
       window.clearInterval(interval);
       document.removeEventListener('visibilitychange', refreshWhenVisible);
+      stopLive();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session?.user.id]);
+
+  const toggleAttempt = (id: string) => {
+    setRetakeNotice(null);
+    setSelectedAttempts((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const allowRetakes = async () => {
+    setIsGranting(true);
+    setActionError(null);
+    setRetakeNotice(null);
+    try {
+      // One request per quiz, listing every chosen student.
+      const byQuiz = new Map<string, Set<string>>();
+      quizAttempts.items.forEach((attempt) => {
+        if (!selectedAttempts.has(attempt.id)) return;
+        byQuiz.set(attempt.quizId, (byQuiz.get(attempt.quizId) ?? new Set()).add(attempt.studentId));
+      });
+      let granted = 0;
+      for (const [quizId, students] of byQuiz) {
+        granted += (await grantRetakes(quizId, [...students])).granted;
+      }
+      setSelectedAttempts(new Set());
+      setRetakeNotice(`Retake opened for ${granted} student${granted === 1 ? '' : 's'}.`);
+      await refreshRef.current(true);
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : 'Could not open the retake.');
+    } finally {
+      setIsGranting(false);
+    }
+  };
 
   const activeTabRef = useRef<GradingTab>('activities');
   const changeTab = (tab: GradingTab) => {
@@ -427,7 +468,18 @@ export function TeacherGradingPage() {
         <h2 id="quiz-results-heading" className="text-xl font-semibold text-parchment">
           Quiz results
         </h2>
-        <p className="mt-1 text-sm text-muted">Scores are calculated on the server when students submit.</p>
+        <p className="mt-1 text-sm text-muted">
+          Each student gets one attempt. Tick the students who may try again and press “Allow retake” — a retake loses a random 1–5%.
+        </p>
+        <div className="mt-4 flex flex-wrap items-center gap-3">
+          <button type="button" className="btn-primary btn-sm" disabled={selectedAttempts.size === 0 || isGranting} onClick={() => void allowRetakes()}>
+            {isGranting ? 'Opening…' : `Allow retake${selectedAttempts.size > 0 ? ` (${selectedAttempts.size})` : ''}`}
+          </button>
+          {selectedAttempts.size > 0 && (
+            <button type="button" className="btn-ghost btn-sm" onClick={() => setSelectedAttempts(new Set())}>Clear selection</button>
+          )}
+          {retakeNotice && <span role="status" className="text-sm text-leaf">{retakeNotice}</span>}
+        </div>
         <div className="mt-5">
           {quizAttempts.items.length === 0 ? (
             <EmptyState icon={<ChartIcon />} title="No quiz attempts yet" description="Results appear here as students complete quizzes." />
@@ -436,6 +488,7 @@ export function TeacherGradingPage() {
               <table className="data-table">
                 <thead>
                   <tr>
+                    <th className="w-10"><span className="sr-only">Select</span></th>
                     <th>Student</th>
                     <th>Quiz</th>
                     <th>Score</th>
@@ -445,6 +498,16 @@ export function TeacherGradingPage() {
                 <tbody>
                   {quizAttempts.items.map((attempt) => (
                     <tr key={attempt.id}>
+                      <td>
+                        <input
+                          type="checkbox"
+                          className="accent-gold"
+                          aria-label={`Select ${attempt.studentName} for a retake of ${attempt.quizTitle}`}
+                          disabled={attempt.retakeOpen}
+                          checked={selectedAttempts.has(attempt.id)}
+                          onChange={() => toggleAttempt(attempt.id)}
+                        />
+                      </td>
                       <td className="font-medium text-parchment">{attempt.studentName}</td>
                       <td className="text-parchment">{attempt.quizTitle}</td>
                       <td>
@@ -452,6 +515,8 @@ export function TeacherGradingPage() {
                           {attempt.percentageScore}%
                         </span>
                         <span className="ml-2 text-xs text-muted">{attempt.scoreObtained}/{attempt.totalPossiblePoints}</span>
+                        {attempt.penaltyPercent ? <span className="badge-neutral ml-2">retake −{attempt.penaltyPercent}%</span> : null}
+                        {attempt.retakeOpen ? <span className="badge-gold ml-2">Retake unlocked</span> : null}
                       </td>
                       <td className="text-muted">{new Date(attempt.completedAt).toLocaleString()}</td>
                     </tr>

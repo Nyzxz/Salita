@@ -17,6 +17,35 @@ import { PageIntro } from '../ui/PageIntro';
 import { QuizReview } from './QuizReview';
 import { ArrowLeftIcon, ArrowRightIcon, CheckIcon, ClockIcon, InboxIcon, QuizIcon } from '../common/icons';
 
+interface QuestionLayout {
+  /** Index of the question in the quiz as the teacher wrote it. */
+  questionIndex: number;
+  /** Original option indexes, in the order this student sees them. */
+  optionOrder: number[];
+}
+
+function shuffle<T>(items: readonly T[]): T[] {
+  const copy = [...items];
+  for (let i = copy.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [copy[i], copy[j]] = [copy[j], copy[i]];
+  }
+  return copy;
+}
+
+/**
+ * How one student sees the quiz. Answers are always stored against the teacher's original
+ * question and option numbers, so shuffling never changes how the quiz is scored.
+ */
+function buildLayout(quiz: QuizContent): QuestionLayout[] {
+  const layout = quiz.questions.map((question, questionIndex) => ({
+    questionIndex,
+    optionOrder: question.options.map((_, optionIndex) => optionIndex),
+  }));
+  if (!quiz.randomize) return layout;
+  return shuffle(layout).map((entry) => ({ ...entry, optionOrder: shuffle(entry.optionOrder) }));
+}
+
 export function AssignedQuizzes() {
   const { session } = useAuth();
   const token = session?.token ?? '';
@@ -24,6 +53,7 @@ export function AssignedQuizzes() {
   const [attempts, setAttempts] = useState<QuizAttemptRecord[]>([]);
   const [selectedQuiz, setSelectedQuiz] = useState<QuizContent | null>(null);
   const [answers, setAnswers] = useState<number[]>([]);
+  const [layout, setLayout] = useState<QuestionLayout[]>([]);
   const [latestAttempt, setLatestAttempt] = useState<QuizAttemptRecord | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -64,6 +94,7 @@ export function AssignedQuizzes() {
       setDeadline(started.expiresAt ? new Date(started.expiresAt).getTime() : null);
       setSelectedQuiz(quiz);
       setAnswers(Array(quiz.questions.length).fill(-1) as number[]);
+      setLayout(buildLayout(quiz));
       setLatestAttempt(null);
     } catch (cause) {
       setError(cause instanceof ApiRequestError ? cause.message : 'Could not start this quiz.');
@@ -83,6 +114,8 @@ export function AssignedQuizzes() {
         const attempt = await submitQuizAttempt(selectedQuiz.id, { userAnswers: current }, token);
         setLatestAttempt(attempt);
         setAttempts((previous) => [attempt, ...previous]);
+        // A used-up retake is gone; the quiz list shows it as completed again.
+        setQuizzes((previous) => previous.map((quiz) => (quiz.id === attempt.quizId ? { ...quiz, retakeOpen: false } : quiz)));
         setDeadline(null);
       } catch (cause) {
         setError(cause instanceof ApiRequestError ? cause.message : 'Could not submit this quiz.');
@@ -151,35 +184,38 @@ export function AssignedQuizzes() {
             )}
           </div>
 
-          {selectedQuiz.questions.map((question, questionIndex) => (
-            <fieldset key={`${questionIndex}-${question.questionText}`} className="flex flex-col gap-3">
-              <legend className="mb-3 flex w-full items-start gap-3 font-medium text-parchment">
-                <span className="flex h-6 w-6 flex-none items-center justify-center rounded-md bg-gold/15 text-xs font-bold text-gold">{questionIndex + 1}</span>
-                <span className="flex-1">{question.questionText}</span>
-                <span className="badge-neutral flex-none">{question.points} pts</span>
-              </legend>
-              {question.options.map((option, optionIndex) => (
-                <label
-                  key={`${optionIndex}-${option}`}
-                  className={`flex cursor-pointer items-center gap-3 rounded-xl border px-4 py-3 text-sm transition duration-150 ${
-                    answers[questionIndex] === optionIndex
-                      ? 'border-gold bg-gold/10 text-parchment shadow-[0_0_0_3px_rgba(232,169,60,0.1)]'
-                      : 'border-night-border bg-night-deep/40 text-muted hover:border-gold/40 hover:text-parchment'
-                  }`}
-                >
-                  <input
-                    type="radio"
-                    name={`question-${questionIndex}`}
-                    value={optionIndex}
-                    checked={answers[questionIndex] === optionIndex}
-                    onChange={() => setAnswers((current) => current.map((answer, index) => index === questionIndex ? optionIndex : answer))}
-                    className="accent-gold"
-                  />
-                  {option}
-                </label>
-              ))}
-            </fieldset>
-          ))}
+          {layout.map(({ questionIndex, optionOrder }, position) => {
+            const question = selectedQuiz.questions[questionIndex];
+            return (
+              <fieldset key={questionIndex} className="flex flex-col gap-3">
+                <legend className="mb-3 flex w-full items-start gap-3 font-medium text-parchment">
+                  <span className="flex h-6 w-6 flex-none items-center justify-center rounded-md bg-gold/15 text-xs font-bold text-gold">{position + 1}</span>
+                  <span className="flex-1">{question.questionText}</span>
+                  <span className="badge-neutral flex-none">{question.points} pts</span>
+                </legend>
+                {optionOrder.map((optionIndex) => (
+                  <label
+                    key={optionIndex}
+                    className={`flex cursor-pointer items-center gap-3 rounded-xl border px-4 py-3 text-sm transition duration-150 ${
+                      answers[questionIndex] === optionIndex
+                        ? 'border-gold bg-gold/10 text-parchment shadow-[0_0_0_3px_rgba(232,169,60,0.1)]'
+                        : 'border-night-border bg-night-deep/40 text-muted hover:border-gold/40 hover:text-parchment'
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name={`question-${questionIndex}`}
+                      value={optionIndex}
+                      checked={answers[questionIndex] === optionIndex}
+                      onChange={() => setAnswers((current) => current.map((answer, index) => index === questionIndex ? optionIndex : answer))}
+                      className="accent-gold"
+                    />
+                    {question.options[optionIndex]}
+                  </label>
+                ))}
+              </fieldset>
+            );
+          })}
 
           <button
             type="button"
@@ -196,10 +232,14 @@ export function AssignedQuizzes() {
             <CheckIcon className="h-6 w-6" />
           </span>
           <h3 className="mt-4 text-xl font-semibold text-parchment">Quiz submitted</h3>
+          <p className="mt-1 text-xs text-muted">Your answers are reviewed below. Your teacher can open a retake if you need one.</p>
           <p className="mt-3 font-display text-5xl font-semibold text-gradient-gold">{latestAttempt.percentageScore}%</p>
           <p className="mt-2 text-sm text-muted">
             {latestAttempt.scoreObtained} / {latestAttempt.totalPossiblePoints} points
           </p>
+          {latestAttempt.penaltyPercent ? (
+            <p className="mt-2 text-xs text-muted">Retake: {latestAttempt.penaltyPercent}% was taken off this score.</p>
+          ) : null}
           {latestAttempt.feedback && <p className="mx-auto mt-4 max-w-md text-sm leading-relaxed text-muted">{latestAttempt.feedback}</p>}
           <button type="button" onClick={() => setSelectedQuiz(null)} className="btn-secondary mt-6">
             Return to quizzes
@@ -218,8 +258,8 @@ export function AssignedQuizzes() {
             const previousAttempts = attempts.filter((attempt) => attempt.quizId === quiz.id);
             const previous = previousAttempts[0];
             const isClosed = quiz.dueDate ? new Date(quiz.dueDate).getTime() < Date.now() : false;
-            const attemptsLeft = quiz.maxAttempts ? Math.max(0, quiz.maxAttempts - previousAttempts.length) : null;
-            const isBlocked = isClosed || attemptsLeft === 0;
+            const isDone = previousAttempts.length > 0 && !quiz.retakeOpen;
+            const isBlocked = isClosed || isDone;
             return (
               <li key={quiz.id} className="surface-interactive flex flex-col p-6">
                 <h3 className="text-lg font-semibold text-parchment">{quiz.title}</h3>
@@ -234,16 +274,19 @@ export function AssignedQuizzes() {
                       {isClosed ? 'Closed' : 'Due'} {new Date(quiz.dueDate).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}
                     </span>
                   ) : null}
-                  {attemptsLeft !== null ? (
-                    <span className={attemptsLeft === 0 ? 'badge-clay' : 'badge-neutral'}>
-                      {attemptsLeft === 0 ? 'No attempts left' : `${attemptsLeft} attempt${attemptsLeft === 1 ? '' : 's'} left`}
-                    </span>
-                  ) : null}
+                  {quiz.retakeOpen ? <span className="badge-gold">Retake unlocked · score −1 to 5%</span> : null}
+                  {isDone ? <span className="badge-neutral">Completed</span> : null}
                 </div>
-                <button type="button" onClick={() => void beginQuiz(quiz)} disabled={isStarting || isBlocked} className="btn-primary btn-sm mt-5 self-start">
-                  {isBlocked ? (isClosed ? 'Quiz closed' : 'No attempts left') : previous ? 'Retake quiz' : 'Start quiz'}
-                  {!isBlocked && <ArrowRightIcon className="h-3.5 w-3.5" />}
-                </button>
+                {isDone && previous ? (
+                  <button type="button" onClick={() => setReviewing(previous)} className="btn-secondary btn-sm mt-5 self-start">
+                    Review my answers
+                  </button>
+                ) : (
+                  <button type="button" onClick={() => void beginQuiz(quiz)} disabled={isStarting || isBlocked} className="btn-primary btn-sm mt-5 self-start">
+                    {isClosed ? 'Quiz closed' : quiz.retakeOpen ? 'Start retake' : 'Start quiz'}
+                    {!isBlocked && <ArrowRightIcon className="h-3.5 w-3.5" />}
+                  </button>
+                )}
               </li>
             );
           })}

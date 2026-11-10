@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { GRADE_LEVELS, type CreateStudentRequest, type GradeLevel, type StudentAccount } from '@shared/types';
-import { createStudentAccount, deleteStudentAccount, downloadGradebook, fetchStudents, updateStudentAccount } from '../../api/admin';
+import { GRADE_LEVELS, type ClassSectionRecord, type CreateStudentRequest, type GradeLevel, type StudentAccount } from '@shared/types';
+import { createStudentAccount, deleteStudentAccount, downloadGradebook, fetchSections, fetchStudents, updateStudentAccount } from '../../api/admin';
 import { ApiRequestError, saveBlob } from '../../api/client';
 import { useAuth } from '../../auth/AuthContext';
 import { DashboardShell } from '../../components/layout/DashboardShell';
@@ -11,6 +11,7 @@ import { CheckIcon, DownloadIcon, SearchIcon } from '../../components/common/ico
 import { ImportStudentsPanel } from '../../components/admin/ImportStudentsPanel';
 import { LoadingState } from '../../components/common/LoadingState';
 import { ErrorState } from '../../components/common/ErrorState';
+import { SectionsPanel } from '../../components/admin/SectionsPanel';
 import { CreateStudentForm } from '../../components/admin/CreateStudentForm';
 import { StudentDirectoryTable } from '../../components/admin/StudentDirectoryTable';
 
@@ -24,6 +25,8 @@ export function UserManagementPage() {
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [sectionFilter, setSectionFilter] = useState<GradeLevel | ''>('');
+  const [classFilter, setClassFilter] = useState('');
+  const [sections, setSections] = useState<ClassSectionRecord[]>([]);
   const [statusFilter, setStatusFilter] = useState<StudentAccount['status'] | ''>('');
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
@@ -39,6 +42,18 @@ export function UserManagementPage() {
   const [isDeleting, setIsDeleting] = useState(false);
   const [copied, setCopied] = useState(false);
 
+  const loadSections = useCallback(() => {
+    fetchSections().then(setSections).catch(() => undefined);
+  }, []);
+  useEffect(() => {
+    loadSections();
+  }, [loadSections]);
+
+  // A section filter only makes sense inside the chosen grade.
+  useEffect(() => {
+    if (classFilter && !sections.some((s) => s.name === classFilter && (!sectionFilter || s.grade === sectionFilter))) setClassFilter('');
+  }, [sectionFilter, sections, classFilter]);
+
   // Wait for a pause in typing before asking the server to search.
   useEffect(() => {
     const timer = window.setTimeout(() => setDebouncedSearch(search), 300);
@@ -50,7 +65,7 @@ export function UserManagementPage() {
     setIsLoading(true);
     setLoadError(null);
     setPage(1);
-    fetchStudents({ page: 1, q: debouncedSearch, section: sectionFilter, status: statusFilter })
+    fetchStudents({ page: 1, q: debouncedSearch, section: sectionFilter, classSection: classFilter, status: statusFilter })
       .then(({ items, meta }) => {
         if (id !== requestId.current) return;
         setStudents(items);
@@ -63,7 +78,7 @@ export function UserManagementPage() {
       .finally(() => {
         if (id === requestId.current) setIsLoading(false);
       });
-  }, [debouncedSearch, sectionFilter, statusFilter]);
+  }, [debouncedSearch, sectionFilter, classFilter, statusFilter]);
 
   useEffect(() => {
     load();
@@ -72,7 +87,7 @@ export function UserManagementPage() {
   const loadMore = async () => {
     setIsLoadingMore(true);
     try {
-      const { items, meta } = await fetchStudents({ page: page + 1, q: debouncedSearch, section: sectionFilter, status: statusFilter });
+      const { items, meta } = await fetchStudents({ page: page + 1, q: debouncedSearch, section: sectionFilter, classSection: classFilter, status: statusFilter });
       setStudents((prev) => [...(prev ?? []), ...items.filter((item) => !prev?.some((existing) => existing.id === item.id))]);
       setTotal(meta.total);
       setPage(page + 1);
@@ -226,10 +241,13 @@ export function UserManagementPage() {
           <h2 id="add-student-heading" className="text-xl font-semibold text-parchment">Add a student</h2>
           <p className="mt-1 text-sm text-muted">They can sign in right away with these details.</p>
           <div className="surface mt-5 p-6">
-            <CreateStudentForm onSubmit={handleCreate} isSaving={isSaving} error={formError} />
+            <CreateStudentForm onSubmit={handleCreate} isSaving={isSaving} error={formError} sections={sections} />
           </div>
           <div className="mt-8">
-            <ImportStudentsPanel onImported={load} />
+            <SectionsPanel sections={sections} onChanged={() => { loadSections(); load(); }} />
+          </div>
+          <div className="mt-8">
+            <ImportStudentsPanel onImported={() => { loadSections(); load(); }} />
           </div>
         </section>
 
@@ -265,6 +283,13 @@ export function UserManagementPage() {
               <select value={sectionFilter} onChange={(event) => setSectionFilter(event.target.value as GradeLevel | '')} className="field">
                 <option value="">All grades</option>
                 {GRADE_LEVELS.map((grade) => <option key={grade} value={grade}>{grade}</option>)}
+              </select>
+            </label>
+            <label>
+              <span className="sr-only">Filter by section</span>
+              <select value={classFilter} onChange={(event) => setClassFilter(event.target.value)} className="field">
+                <option value="">All sections</option>
+                {[...new Set(sections.filter((s) => !sectionFilter || s.grade === sectionFilter).map((s) => s.name))].map((n) => <option key={n} value={n}>{n}</option>)}
               </select>
             </label>
             <label>

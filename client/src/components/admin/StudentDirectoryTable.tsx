@@ -49,7 +49,7 @@ export function StudentDirectoryTable({
         <thead>
           <tr>
             <th>Student</th>
-            <th>Grade</th>
+            <th>Grade / section</th>
             <th>Created</th>
             <th>Status</th>
             <th>Actions</th>
@@ -70,7 +70,7 @@ export function StudentDirectoryTable({
                     </div>
                   </div>
                 </td>
-                <td className="text-muted">{student.section}</td>
+                <td className="text-muted">{student.section}{student.classSection ? <span className="badge-neutral ml-2">{student.classSection}</span> : null}</td>
                 <td className="whitespace-nowrap text-muted">{formatDate(student.createdAt)}</td>
                 <td>
                   <div className="flex flex-col items-start gap-1.5">

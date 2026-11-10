@@ -1,3 +1,4 @@
+import { onLive, throttledWhenLive } from '../lib/live';
 import { useCallback, useEffect, useState } from 'react';
 import type { ActivityTask, SubmissionRecord } from '@shared/types';
 import { fetchMySubmissions, fetchTasks, submitTaskWork } from '../api/tasks';
@@ -36,11 +37,13 @@ export function useTasksAndSubmissions(token: string, polling = true) {
     const refreshWhenVisible = () => {
       if (document.visibilityState === 'visible') void load();
     };
-    const interval = window.setInterval(refreshWhenVisible, 10_000);
+    const interval = window.setInterval(throttledWhenLive(refreshWhenVisible), 10_000);
     document.addEventListener('visibilitychange', refreshWhenVisible);
+    const stopLive = onLive(() => void load());
     return () => {
       window.clearInterval(interval);
       document.removeEventListener('visibilitychange', refreshWhenVisible);
+      stopLive();
     };
   }, [load, polling]);
 

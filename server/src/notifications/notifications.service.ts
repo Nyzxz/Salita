@@ -89,3 +89,54 @@ export function parseMarkReadRequest(body: unknown): readonly string[] | 'all' |
   if (Array.isArray(ids) && ids.length > 0 && ids.length <= 100 && ids.every((id) => typeof id === 'string')) return ids as string[];
   return null;
 }
+
+/** Where a live stream writes to, so the same loop serves Express and Vercel. */
+export interface EventSink {
+  write(chunk: string): void;
+  isClosed(): boolean;
+}
+
+const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
+
+/**
+ * Server-sent events for one signed-in user. It watches that user's notifications
+ * and sends an `update` event whenever something new arrives, which tells the
+ * browser to refresh. The stream ends on its own after `maxMs` (serverless
+ * functions have a time limit) and the browser reconnects.
+ */
+export async function streamNotificationEvents(
+  userId: string,
+  sink: EventSink,
+  options: { maxMs?: number; pollMs?: number; heartbeatMs?: number } = {},
+): Promise<void> {
+  const { maxMs = 50_000, pollMs = 2_000, heartbeatMs = 15_000 } = options;
+  await connectDB();
+  const snapshot = async (): Promise<string> => {
+    const [latest, unread] = await Promise.all([
+      Notification.findOne({ userId }).sort({ createdAt: -1 }).select('createdAt').lean(),
+      Notification.countDocuments({ userId, readAt: null }),
+    ]);
+    return `${latest ? latest.createdAt.getTime() : 0}:${unread}`;
+  };
+
+  const started = Date.now();
+  let lastSeen = await snapshot();
+  let lastWrite = Date.now();
+  sink.write('retry: 3000\n\n');
+  sink.write(`event: ready\ndata: {}\n\n`);
+
+  while (!sink.isClosed() && Date.now() - started < maxMs) {
+    await sleep(pollMs);
+    if (sink.isClosed()) break;
+    const current = await snapshot();
+    if (current !== lastSeen) {
+      lastSeen = current;
+      lastWrite = Date.now();
+      sink.write(`event: update\ndata: {}\n\n`);
+    } else if (Date.now() - lastWrite >= heartbeatMs) {
+      lastWrite = Date.now();
+      sink.write(': keep-alive\n\n');
+    }
+  }
+  if (!sink.isClosed()) sink.write(`event: bye\ndata: {}\n\n`);
+}

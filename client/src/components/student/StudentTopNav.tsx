@@ -1,27 +1,9 @@
-import { useLayoutEffect, useRef, useState, type ComponentType, type SVGProps } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Avatar } from '../common/Avatar';
 import { NotificationBell } from '../common/NotificationBell';
 import { Brand } from '../common/Brand';
-import {
-  BookIcon,
-  ChartIcon,
-  ClipboardCheckIcon,
-  LogOutIcon,
-  QuizIcon,
-  TargetIcon,
-  UserIcon,
-} from '../common/icons';
-
-export type StudentTab = 'lectures' | 'quizzes' | 'activities' | 'performance' | 'grades' | 'profile';
-
-const TABS: { id: StudentTab; label: string; icon: ComponentType<SVGProps<SVGSVGElement>> }[] = [
-  { id: 'lectures', label: 'Lectures', icon: BookIcon },
-  { id: 'quizzes', label: 'Quizzes', icon: QuizIcon },
-  { id: 'activities', label: 'Activities', icon: ClipboardCheckIcon },
-  { id: 'performance', label: 'Performance Tasks', icon: TargetIcon },
-  { id: 'grades', label: 'My Grades', icon: ChartIcon },
-  { id: 'profile', label: 'Profile', icon: UserIcon },
-];
+import { LogOutIcon, UserIcon } from '../common/icons';
+import type { StudentTab } from './StudentSidebar';
 
 interface StudentTopNavProps {
   activeTab: StudentTab;
@@ -30,72 +12,76 @@ interface StudentTopNavProps {
   onSignOut: () => void;
 }
 
+/** Top bar: the student's initials open a menu with Profile and Log out. */
 export function StudentTopNav({ activeTab, onChangeTab, studentName, onSignOut }: StudentTopNavProps) {
-  const buttonRefs = useRef<Partial<Record<StudentTab, HTMLButtonElement>>>({});
-  const [indicator, setIndicator] = useState({ left: 0, width: 0 });
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
 
-  useLayoutEffect(() => {
-    const measure = () => {
-      const el = buttonRefs.current[activeTab];
-      if (el) setIndicator({ left: el.offsetLeft, width: el.offsetWidth });
+  useEffect(() => {
+    if (!open) return undefined;
+    const onPointer = (event: MouseEvent) => {
+      if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
     };
-    measure();
-    window.addEventListener('resize', measure);
-    return () => window.removeEventListener('resize', measure);
-  }, [activeTab]);
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setOpen(false);
+    };
+    document.addEventListener('mousedown', onPointer);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onPointer);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [open]);
 
   return (
     <header className="glass sticky top-0 z-30 border-b border-night-border">
-      <div className="mx-auto flex h-16 max-w-[1280px] items-center justify-between gap-4 px-4 sm:px-6 xl:px-8">
+      <div className="mx-auto flex h-16 max-w-[1400px] items-center justify-between gap-4 px-4 sm:px-6 xl:px-8">
         <Brand to="/dashboard/student" />
 
         <div className="flex items-center gap-3">
-          <div className="hidden items-center gap-3 sm:flex">
-            <div className="text-right leading-tight">
-              <p className="text-sm font-medium text-parchment">{studentName}</p>
-              <p className="text-xs text-leaf">Student</p>
-            </div>
-            <Avatar name={studentName} size="sm" accent="leaf" />
-          </div>
           <NotificationBell />
-          <span aria-hidden="true" className="hidden h-6 w-px bg-night-border sm:block" />
-          <button type="button" onClick={onSignOut} className="btn-ghost btn-sm" aria-label="Sign out">
-            <LogOutIcon className="h-4 w-4" />
-            <span className="hidden sm:inline">Sign out</span>
-          </button>
+          <div ref={rootRef} className="relative">
+            <button
+              type="button"
+              onClick={() => setOpen((value) => !value)}
+              aria-haspopup="menu"
+              aria-expanded={open}
+              aria-label={`Account menu for ${studentName}`}
+              className="flex items-center gap-2 rounded-full p-0.5 transition hover:ring-2 hover:ring-gold/40 focus-visible:ring-2 focus-visible:ring-gold"
+            >
+              <Avatar name={studentName} size="md" accent="leaf" />
+            </button>
+            {open && (
+              <div role="menu" className="surface absolute right-0 top-full z-40 mt-2 w-60 animate-fade-in overflow-hidden p-1.5 shadow-xl">
+                <div className="px-3 py-2.5">
+                  <p className="truncate text-sm font-semibold text-parchment">{studentName}</p>
+                  <p className="text-xs text-leaf">Student</p>
+                </div>
+                <div className="my-1 h-px bg-night-border" />
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => { setOpen(false); onChangeTab('profile'); }}
+                  aria-current={activeTab === 'profile' ? 'page' : undefined}
+                  className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-sm text-parchment transition hover:bg-white/5"
+                >
+                  <UserIcon className="h-4 w-4 text-gold" />
+                  Profile management
+                </button>
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => { setOpen(false); onSignOut(); }}
+                  className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-sm text-parchment transition hover:bg-white/5"
+                >
+                  <LogOutIcon className="h-4 w-4 text-clay" />
+                  Log out
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
-
-      <nav aria-label="Dashboard sections" className="mx-auto max-w-[1280px] overflow-x-auto px-4 sm:px-6 xl:px-8">
-        <div className="relative flex w-max gap-1">
-          {TABS.map((tab) => {
-            const isActive = tab.id === activeTab;
-            const Icon = tab.icon;
-            return (
-              <button
-                key={tab.id}
-                ref={(el) => {
-                  if (el) buttonRefs.current[tab.id] = el;
-                }}
-                type="button"
-                onClick={() => onChangeTab(tab.id)}
-                aria-current={isActive ? 'page' : undefined}
-                className={`relative flex flex-none items-center gap-2 px-3.5 py-3 text-sm font-medium transition-colors duration-200 ${
-                  isActive ? 'text-parchment' : 'text-muted hover:text-parchment'
-                }`}
-              >
-                <Icon className={`h-4 w-4 transition-colors ${isActive ? 'text-gold' : ''}`} />
-                {tab.label}
-              </button>
-            );
-          })}
-          <span
-            aria-hidden="true"
-            className="absolute bottom-0 h-0.5 rounded-full bg-gold shadow-[0_0_12px_rgba(232,169,60,0.7)] transition-all duration-300 ease-out"
-            style={{ left: indicator.left, width: indicator.width }}
-          />
-        </div>
-      </nav>
     </header>
   );
 }

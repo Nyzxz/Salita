@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { NotificationFeed, NotificationRecord } from '@shared/types';
 import { fetchNotifications, markNotificationsRead } from '../../api/auth';
+import { useLiveRefresh, throttledWhenLive } from '../../lib/live';
 import { BellIcon } from './icons';
 
 const POLL_MS = 30_000;
@@ -32,13 +33,15 @@ export function NotificationBell() {
     const tick = () => {
       if (document.visibilityState === 'visible') refresh();
     };
-    const interval = window.setInterval(tick, POLL_MS);
+    const interval = window.setInterval(throttledWhenLive(tick, 4), POLL_MS);
     document.addEventListener('visibilitychange', tick);
     return () => {
       window.clearInterval(interval);
       document.removeEventListener('visibilitychange', tick);
     };
   }, [refresh]);
+
+  useLiveRefresh(refresh);
 
   useEffect(() => {
     if (!open) return;

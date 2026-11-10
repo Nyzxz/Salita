@@ -10,7 +10,7 @@ import {
 } from '../auth/auth.service.js';
 import { clearSessionCookie } from '../auth/cookies.js';
 import { toCookieSession } from '../auth/sessionResponse.js';
-import { listNotifications, markNotificationsRead, parseMarkReadRequest } from '../notifications/notifications.service.js';
+import { listNotifications, markNotificationsRead, parseMarkReadRequest, streamNotificationEvents } from '../notifications/notifications.service.js';
 import { clientIpFrom } from '../auth/ipThrottle.js';
 import { loginOutcomeToHttp } from '../auth/loginOutcome.js';
 import { ApiError } from '../middleware/errorHandler.js';
@@ -39,6 +39,25 @@ authRouter.post('/login', async (req, res, next) => {
 authRouter.get('/me', requireAuthAllowingPasswordChange(), async (req, res, next) => {
   try {
     res.setHeader('Cache-Control', 'no-store');
+    if (req.query.action === 'events') {
+      res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
+      res.setHeader('Cache-Control', 'no-cache, no-transform');
+      res.setHeader('Connection', 'keep-alive');
+      res.setHeader('X-Accel-Buffering', 'no');
+      res.flushHeaders();
+      let closed = false;
+      req.on('close', () => {
+        closed = true;
+      });
+      await streamNotificationEvents((res.locals.user as User).id, {
+        write: (chunk) => {
+          res.write(chunk);
+        },
+        isClosed: () => closed,
+      });
+      res.end();
+      return;
+    }
     if (req.query.action === 'notifications') {
       const body: ApiResponse<NotificationFeed> = { success: true, data: await listNotifications((res.locals.user as User).id) };
       res.json(body);

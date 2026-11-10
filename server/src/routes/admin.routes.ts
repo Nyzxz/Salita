@@ -11,6 +11,7 @@ import {
   parseUpdateStudentRequest,
   removeStudent,
 } from '../admin/students.service.js';
+import { createSection, deleteSection, listSections, parseCreateSectionRequest } from '../admin/sections.service.js';
 import { isGradeLevel } from '../grades.js';
 import { parsePageRequest, queryString } from '../pagination.js';
 import { ApiError } from '../middleware/errorHandler.js';
@@ -26,6 +27,40 @@ export const adminRouter = Router();
 // Every route below requires a signed-in teacher.
 adminRouter.use(requireAuth('TEACHER'));
 
+/**
+ * Class sections within a grade, served on the students URL (same shape as the Vercel function):
+ * GET /api/admin/students?resource=sections, POST (same URL) { grade, name }, DELETE ...&id=
+ */
+adminRouter.all('/students', async (req, res, next) => {
+  if (req.query.resource !== 'sections') {
+    next();
+    return;
+  }
+  try {
+    if (req.method === 'GET') {
+      res.json({ success: true, data: await listSections() });
+      return;
+    }
+    if (req.method === 'POST') {
+      const request = parseCreateSectionRequest(req.body);
+      if (!request) throw new ApiError(400, 'Choose a grade and give the section a name (up to 40 characters).');
+      const result = await createSection(request);
+      if (!result.ok) throw new ApiError(result.status, result.error);
+      res.status(201).json({ success: true, data: result.data });
+      return;
+    }
+    if (req.method === 'DELETE') {
+      const result = await deleteSection(queryString(req.query, 'id', 40) ?? '');
+      if (!result.ok) throw new ApiError(result.status, result.error);
+      res.json({ success: true, data: result.data });
+      return;
+    }
+    throw new ApiError(405, `Method ${req.method} not allowed.`);
+  } catch (err) {
+    next(err);
+  }
+});
+
 /** GET /api/admin/students?page=&limit=&q=&section=&status=  — or ?export=gradebook for a CSV */
 adminRouter.get('/students', async (req, res, next) => {
   try {
@@ -38,12 +73,14 @@ adminRouter.get('/students', async (req, res, next) => {
     }
     const paging = parsePageRequest(req.query);
     const section = queryString(req.query, 'section', 20);
+    const classSection = queryString(req.query, 'classSection', 40);
     const status = queryString(req.query, 'status', 10);
     const { items, total } = await getAllStudents({
       skip: paging.skip,
       limit: paging.limit,
       q: queryString(req.query, 'q', 80),
       ...(section && isGradeLevel(section) ? { section } : {}),
+      ...(classSection ? { classSection } : {}),
       ...(status === 'ACTIVE' || status === 'INACTIVE' ? { status } : {}),
     });
     const body: ApiResponse<StudentAccount[]> = {

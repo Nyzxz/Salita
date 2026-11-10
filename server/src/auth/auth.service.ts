@@ -52,6 +52,7 @@ function toPublicUser(record: UserDocument): User {
     role: record.role,
     email: record.email,
     ...(record.section ? { section: record.section } : {}),
+    ...(record.classSection ? { classSection: record.classSection } : {}),
     mustChangePassword: record.mustChangePassword === true,
   };
 }

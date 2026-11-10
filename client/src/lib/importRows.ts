@@ -1,7 +1,7 @@
 import { GRADE_LEVELS, type GradeLevel, type ImportStudentRow } from '@shared/types';
 import { parseCsv } from './csv';
 
-const HEADER_ALIASES: Record<string, 'fullName' | 'username' | 'email' | 'section'> = {
+const HEADER_ALIASES: Record<string, 'fullName' | 'username' | 'email' | 'section' | 'classSection'> = {
   fullname: 'fullName',
   name: 'fullName',
   studentname: 'fullName',
@@ -12,6 +12,10 @@ const HEADER_ALIASES: Record<string, 'fullName' | 'username' | 'email' | 'sectio
   grade: 'section',
   gradelevel: 'section',
   section: 'section',
+  classsection: 'classSection',
+  sectionname: 'classSection',
+  class: 'classSection',
+  classname: 'classSection',
 };
 
 /** Accepts "Grade 9", "grade9" or just "9". */
@@ -29,15 +33,21 @@ export interface ParsedImport {
 
 export const MAX_IMPORT_FILE_ROWS = 500;
 
-/** Reads a CSV with a header row (full name, username, email, grade) into import rows. */
+/** Reads a CSV with a header row (full name, username, email, grade, optional section) into import rows. */
 export function parseImportCsv(text: string): ParsedImport {
   const table = parseCsv(text);
   if (table.length < 2) return { rows: [], problems: ['The file needs a header row and at least one student.'] };
 
-  const columns = table[0].map((heading) => HEADER_ALIASES[heading.toLowerCase().replace(/[^a-z]/g, '')]);
+  const headings = table[0].map((heading) => heading.toLowerCase().replace(/[^a-z]/g, ''));
+  const hasGradeColumn = headings.includes('grade') || headings.includes('gradelevel');
+  const columns = headings.map((heading) => {
+    // A bare "section" column means the grade in older files, but the class section when a grade column exists too.
+    if (heading === 'section') return hasGradeColumn ? 'classSection' : 'section';
+    return HEADER_ALIASES[heading];
+  });
   const missing = (['fullName', 'username', 'email', 'section'] as const).filter((key) => !columns.includes(key));
   if (missing.length > 0) {
-    return { rows: [], problems: ['The header row must have these columns: full name, username, email, grade.'] };
+    return { rows: [], problems: ['The header row must have these columns: full name, username, email, grade (section is optional).'] };
   }
   if (table.length - 1 > MAX_IMPORT_FILE_ROWS) {
     return { rows: [], problems: [`Import at most ${MAX_IMPORT_FILE_ROWS} students at a time.`] };
@@ -50,6 +60,7 @@ export function parseImportCsv(text: string): ParsedImport {
     const line = index + 2;
     const get = (key: string): string => (cells[columns.indexOf(key as never)] ?? '').trim();
     const grade = normalizeGrade(get('section'));
+    const classSection = get('classSection').replace(/\s+/g, ' ');
     const username = get('username').toLowerCase();
     if (!get('fullName') || !username || !get('email')) {
       problems.push(`Line ${line}: name, username and email are all required.`);
@@ -59,7 +70,7 @@ export function parseImportCsv(text: string): ParsedImport {
       problems.push(`Line ${line}: username "${username}" appears more than once.`);
     } else {
       seen.add(username);
-      rows.push({ fullName: get('fullName'), username, email: get('email'), section: grade });
+      rows.push({ fullName: get('fullName'), username, email: get('email'), section: grade, ...(classSection ? { classSection } : {}) });
     }
   });
   return { rows, problems };

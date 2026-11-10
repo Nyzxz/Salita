@@ -10,6 +10,7 @@ import {
 import type { AuthSession, LoginRequest, User } from '@shared/types';
 import { fetchCurrentUser, loginRequest, logoutRequest } from '../api/auth';
 import { ApiRequestError, onUnauthorized } from '../api/client';
+import { startLive, stopLive } from '../lib/live';
 
 /**
  * The real session token lives in an httpOnly cookie that scripts cannot read, so
@@ -96,6 +97,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       cancelled = true;
     };
   }, []);
+
+  // Live updates run while someone is signed in.
+  const signedIn = session !== null;
+  useEffect(() => {
+    if (!signedIn) return undefined;
+    startLive();
+    return () => stopLive();
+  }, [signedIn]);
 
   // If the server stops accepting the cookie (expired, deactivated, password changed elsewhere), sign out here too.
   useEffect(() => {

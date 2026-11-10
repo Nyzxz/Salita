@@ -10,9 +10,13 @@ import type {
 import { connectDB } from '../config/db.js';
 import { csvRow } from '../csv.js';
 import { Quiz } from '../models/Quiz.js';
+import { QuizRetake } from '../models/QuizRetake.js';
+import { QuizStart } from '../models/QuizStart.js';
+import { Attachment } from '../models/Attachment.js';
 import { LearningContent } from '../models/LearningContent.js';
 import { TASKS } from '../data/tasks.data.js';
 import { escapeRegExp } from '../pagination.js';
+import { sectionExists } from './sections.service.js';
 import { isGradeLevel } from '../grades.js';
 import { QuizAttempt } from '../models/QuizAttempt.js';
 import { Submission } from '../models/Submission.js';
@@ -25,7 +29,8 @@ const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 /** Checks the create-student request body's shape without trusting it. */
 export function parseCreateStudentRequest(body: unknown): CreateStudentRequest | null {
   if (typeof body !== 'object' || body === null) return null;
-  const { fullName, username, email, password, section } = body as Record<string, unknown>;
+  const { fullName, username, email, password, section, classSection } = body as Record<string, unknown>;
+  if (classSection !== undefined && (typeof classSection !== 'string' || classSection.trim().length > 40)) return null;
   if (
     typeof fullName !== 'string' ||
     typeof username !== 'string' ||
@@ -50,14 +55,19 @@ export function parseCreateStudentRequest(body: unknown): CreateStudentRequest |
     trimmed.password.length > 128 ||
     !isGradeLevel(trimmed.section)
   ) return null;
-  return trimmed as CreateStudentRequest;
+  const className = typeof classSection === 'string' ? classSection.trim() : '';
+  return { ...(trimmed as CreateStudentRequest), ...(className ? { classSection: className } : {}) };
 }
 
 /** Checks the update-student request body's shape. Every field is optional. */
 export function parseUpdateStudentRequest(body: unknown): UpdateStudentRequest | null {
   if (typeof body !== 'object' || body === null) return null;
-  const { fullName, email, section, status, password } = body as Record<string, unknown>;
+  const { fullName, email, section, classSection, status, password } = body as Record<string, unknown>;
   const result: UpdateStudentRequest = {};
+  if (classSection !== undefined) {
+    if (typeof classSection !== 'string' || classSection.trim().length > 40) return null;
+    result.classSection = classSection.trim();
+  }
 
   if (fullName !== undefined) {
     if (typeof fullName !== 'string' || fullName.trim().length === 0 || fullName.trim().length > 120) return null;
@@ -90,6 +100,7 @@ function toStudentAccount(record: UserDocument): StudentAccount {
     username: record.username,
     email: record.email,
     section: record.section ?? '',
+    ...(record.classSection ? { classSection: record.classSection } : {}),
     createdAt: record.createdAt.toISOString(),
     status: record.status,
     mustChangePassword: record.mustChangePassword === true,
@@ -106,6 +117,7 @@ export interface StudentFilters {
   /** Case-insensitive match on name, username or email. */
   q?: string;
   section?: GradeLevel;
+  classSection?: string;
   status?: StudentAccount['status'];
 }
 
@@ -118,6 +130,7 @@ export async function getAllStudents(filters: StudentFilters = {}): Promise<Stud
   await connectDB();
   const query: Record<string, unknown> = { role: 'STUDENT' };
   if (filters.section) query.section = filters.section;
+  if (filters.classSection) query.classSection = filters.classSection;
   if (filters.status) query.status = filters.status;
   if (filters.q) {
     const pattern = new RegExp(escapeRegExp(filters.q), 'i');
@@ -142,6 +155,9 @@ export async function addStudent(
   if (!EMAIL_PATTERN.test(request.email)) {
     return { ok: false, status: 400, error: 'Enter a valid email address.' };
   }
+  if (request.classSection && !(await sectionExists(request.section, request.classSection))) {
+    return { ok: false, status: 400, error: `${request.section} has no section called “${request.classSection}”. Add it under Sections first.` };
+  }
   const existing = await UserModel.exists({ username: request.username.toLowerCase() });
   if (existing) {
     return { ok: false, status: 409, error: `Username "${request.username}" is already taken.` };
@@ -155,6 +171,7 @@ export async function addStudent(
       password: request.password,
       role: 'STUDENT',
       section: request.section,
+      ...(request.classSection ? { classSection: request.classSection } : {}),
       // The teacher hands over a default password; the student must replace it at first sign-in.
       mustChangePassword: true,
     });
@@ -187,6 +204,17 @@ export async function editStudent(
     if (patch.fullName !== undefined) record.fullName = patch.fullName;
     if (patch.email !== undefined) record.email = patch.email.toLowerCase();
     if (patch.section !== undefined) record.section = patch.section;
+    // A section belongs to one grade: moving grades drops it unless a matching one is chosen.
+    if (patch.section !== undefined && patch.classSection === undefined) record.classSection = undefined;
+    if (patch.classSection !== undefined) {
+      if (patch.classSection === '') {
+        record.classSection = undefined;
+      } else if (await sectionExists(record.section ?? '', patch.classSection)) {
+        record.classSection = patch.classSection;
+      } else {
+        return { ok: false, status: 400, error: `${record.section} has no section called “${patch.classSection}”.` };
+      }
+    }
     if (patch.status !== undefined) record.status = patch.status;
     if (patch.password !== undefined) {
       record.password = patch.password;
@@ -223,6 +251,9 @@ export async function removeStudent(id: string): Promise<ServiceResult<{ id: str
     await Promise.all([
       Submission.deleteMany({ studentId: record._id }),
       QuizAttempt.deleteMany({ studentId: record._id }),
+      QuizRetake.deleteMany({ studentId: record._id }),
+      QuizStart.deleteMany({ studentId: record._id }),
+      Attachment.deleteMany({ studentId: record._id }),
     ]);
     await record.deleteOne();
     return { ok: true, data: { id } };
@@ -255,13 +286,14 @@ export function parseImportStudentsRequest(body: unknown): ImportStudentRow[] | 
   const rows: ImportStudentRow[] = [];
   for (const item of students) {
     if (typeof item !== 'object' || item === null) return null;
-    const { fullName, username, email, section } = item as Record<string, unknown>;
+    const { fullName, username, email, section, classSection } = item as Record<string, unknown>;
     // Rows that don't pass the normal rules are reported per row rather than failing the whole batch.
     rows.push({
       fullName: typeof fullName === 'string' ? fullName : '',
       username: typeof username === 'string' ? username : '',
       email: typeof email === 'string' ? email : '',
       section: (typeof section === 'string' ? section : '') as GradeLevel,
+      ...(typeof classSection === 'string' && classSection.trim() ? { classSection: classSection.trim() } : {}),
     });
   }
   return rows;
@@ -325,6 +357,7 @@ export async function buildGradebookCsv(): Promise<string> {
       'Full name',
       'Username',
       'Grade',
+      'Section',
       ...taskColumns.map((task) => `${task.title} (/${task.points})`),
       ...quizzes.map((quiz) => `Quiz: ${quiz.title} (best %)`),
     ]),
@@ -336,6 +369,7 @@ export async function buildGradebookCsv(): Promise<string> {
         student.fullName,
         student.username,
         student.section ?? '',
+        student.classSection ?? '',
         ...taskColumns.map((task) => grades.get(`${task.id}:${id}`) ?? ''),
         ...quizzes.map((quiz) => best.get(`${String(quiz._id)}:${id}`) ?? ''),
       ]),

@@ -1,5 +1,6 @@
 import type {
   CreateStudentRequest,
+  ClassSectionRecord,
   GradeLevel,
   ImportStudentResult,
   ImportStudentRow,
@@ -7,13 +8,14 @@ import type {
   StudentAccount,
   UpdateStudentRequest,
 } from '@shared/types';
-import { apiDelete, apiDownload, apiGetPage, apiPost, apiPut } from './client';
+import { apiDelete, apiDownload, apiGet, apiGetPage, apiPost, apiPut } from './client';
 
 export interface StudentQuery {
   page?: number;
   limit?: number;
   q?: string;
   section?: GradeLevel | '';
+  classSection?: string;
   status?: StudentAccount['status'] | '';
 }
 
@@ -24,6 +26,7 @@ export async function fetchStudents(
   const params: Record<string, string> = { page: String(query.page ?? 1), limit: String(query.limit ?? 50) };
   if (query.q?.trim()) params.q = query.q.trim();
   if (query.section) params.section = query.section;
+  if (query.classSection) params.classSection = query.classSection;
   if (query.status) params.status = query.status;
   const { data, meta } = await apiGetPage<StudentAccount[]>('/api/admin/students', params);
   return { items: data, meta: meta ?? { total: data.length, page: 1, limit: data.length } };
@@ -55,4 +58,16 @@ export function importStudents(students: ImportStudentRow[]): Promise<ImportStud
 
 export function downloadGradebook(): Promise<Blob> {
   return apiDownload('/api/admin/students', { export: 'gradebook' });
+}
+
+export function fetchSections(): Promise<ClassSectionRecord[]> {
+  return apiGet<ClassSectionRecord[]>('/api/admin/students', { resource: 'sections' });
+}
+
+export function createSection(grade: GradeLevel, name: string): Promise<ClassSectionRecord> {
+  return apiPost<ClassSectionRecord>('/api/admin/students?resource=sections', { grade, name });
+}
+
+export function deleteSection(id: string): Promise<{ id: string; studentsCleared: number }> {
+  return apiDelete<{ id: string; studentsCleared: number }>(`/api/admin/students?resource=sections&id=${encodeURIComponent(id)}`);
 }

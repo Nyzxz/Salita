@@ -2,7 +2,7 @@ import { Navigate, useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
 import { dashboardPathFor } from '../auth/routes';
 import { Brand } from '../components/common/Brand';
-import { LogOutIcon, ShieldIcon } from '../components/common/icons';
+import { ShieldIcon } from '../components/common/icons';
 import { LoadingState } from '../components/common/LoadingState';
 import { ChangePasswordForm } from '../components/profile/ChangePasswordForm';
 
@@ -11,7 +11,7 @@ import { ChangePasswordForm } from '../components/profile/ChangePasswordForm';
  * resets their password). Nothing else in the app works until it is done.
  */
 export function ChangePasswordPage() {
-  const { session, isRestoring, logout } = useAuth();
+  const { session, isRestoring } = useAuth();
   const navigate = useNavigate();
 
   if (isRestoring) {
@@ -26,11 +26,6 @@ export function ChangePasswordPage() {
   if (!session.user.mustChangePassword) {
     return <Navigate to={dashboardPathFor(session.user.role)} replace />;
   }
-
-  const handleSignOut = () => {
-    logout();
-    navigate('/login', { replace: true });
-  };
 
   return (
     <div className="aurora-backdrop grid-dots relative flex min-h-screen flex-col items-center justify-center overflow-hidden px-5 py-12">
@@ -54,11 +49,6 @@ export function ChangePasswordPage() {
             />
           </div>
         </div>
-
-        <button type="button" onClick={handleSignOut} className="btn-ghost btn-sm mt-6">
-          <LogOutIcon className="h-4 w-4" />
-          Sign out
-        </button>
       </div>
     </div>
   );

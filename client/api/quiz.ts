@@ -8,6 +8,8 @@ import {
   deleteQuiz,
   getAllQuizAttempts,
   getTeacherAnalytics,
+  grantRetakes,
+  parseGrantRetakesRequest,
   updateQuiz,
   getStudentQuizAttempts,
   listQuizzes,
@@ -131,6 +133,26 @@ async function handleSavedQuizApi(req: VercelRequest, res: VercelResponse): Prom
     }
     const body: ApiResponse<QuizStartRecord> = { success: true, data: started.data };
     res.status(200).json(body);
+    return;
+  }
+
+  const retakeMatch = path.match(/^([^/]+)\/retakes$/);
+  if (retakeMatch && req.method === 'POST') {
+    if (user.role !== 'TEACHER') {
+      sendError(res, 403, 'Your account is not allowed to do that.');
+      return;
+    }
+    const studentIds = parseGrantRetakesRequest(req.body);
+    if (!studentIds) {
+      sendError(res, 400, 'Choose at least one student.');
+      return;
+    }
+    const result = await grantRetakes(retakeMatch[1], studentIds);
+    if (!result.ok) {
+      sendError(res, result.status, result.error);
+      return;
+    }
+    res.status(200).json({ success: true, data: result.data });
     return;
   }
 

@@ -1,5 +1,5 @@
 import { useEffect, useState, type ChangeEvent, type FormEvent } from 'react';
-import { GRADE_LEVELS, type CreateStudentRequest, type GradeLevel } from '@shared/types';
+import { GRADE_LEVELS, type ClassSectionRecord, type CreateStudentRequest, type GradeLevel } from '@shared/types';
 import { generateDefaultPassword } from '../../lib/passwordRules';
 import { CheckIcon, RefreshIcon } from '../common/icons';
 import { Notice } from '../ui/Notice';
@@ -8,6 +8,8 @@ interface CreateStudentFormProps {
   onSubmit: (request: CreateStudentRequest) => Promise<void>;
   isSaving: boolean;
   error: string | null;
+  /** Class sections the teacher has made; the picker only offers the ones for the chosen grade. */
+  sections: ClassSectionRecord[];
 }
 
 interface Draft {
@@ -15,11 +17,12 @@ interface Draft {
   username: string;
   email: string;
   section: GradeLevel | '';
+  classSection: string;
 }
 
-const EMPTY: Draft = { fullName: '', username: '', email: '', section: '' };
+const EMPTY: Draft = { fullName: '', username: '', email: '', section: '', classSection: '' };
 
-export function CreateStudentForm({ onSubmit, isSaving, error }: CreateStudentFormProps) {
+export function CreateStudentForm({ onSubmit, isSaving, error, sections }: CreateStudentFormProps) {
   const [form, setForm] = useState<Draft>(EMPTY);
   const [password, setPassword] = useState('');
   const [copied, setCopied] = useState(false);
@@ -36,8 +39,11 @@ export function CreateStudentForm({ onSubmit, isSaving, error }: CreateStudentFo
   }, [detailsFilled, password, form.fullName, form.username]);
 
   const update = (field: keyof Draft) => (event: ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-    setForm((prev) => ({ ...prev, [field]: event.target.value }));
+    const value = event.target.value;
+    // Changing the grade clears the section, since sections belong to one grade.
+    setForm((prev) => ({ ...prev, [field]: value, ...(field === 'section' ? { classSection: '' } : {}) }));
   };
+  const gradeSections = sections.filter((section) => section.grade === form.section);
 
   const regenerate = () => setPassword(generateDefaultPassword(form.fullName, form.username));
 
@@ -55,7 +61,14 @@ export function CreateStudentForm({ onSubmit, isSaving, error }: CreateStudentFo
     event.preventDefault();
     if (form.section === '' || password === '') return;
     try {
-      await onSubmit({ ...form, section: form.section, password });
+      await onSubmit({
+        fullName: form.fullName,
+        username: form.username,
+        email: form.email,
+        section: form.section,
+        ...(form.classSection ? { classSection: form.classSection } : {}),
+        password,
+      });
       setForm(EMPTY);
       setPassword('');
     } catch {
@@ -120,6 +133,18 @@ export function CreateStudentForm({ onSubmit, isSaving, error }: CreateStudentFo
           {GRADE_LEVELS.map((grade) => (
             <option key={grade} value={grade}>
               {grade}
+            </option>
+          ))}
+        </select>
+      </label>
+
+      <label className="block">
+        <span className="field-label">Section (optional)</span>
+        <select value={form.classSection} onChange={update('classSection')} disabled={form.section === ''} className="field">
+          <option value="">{form.section === '' ? 'Choose a grade first' : gradeSections.length === 0 ? 'No sections for this grade yet' : 'No section'}</option>
+          {gradeSections.map((section) => (
+            <option key={section.id} value={section.name}>
+              {section.name}
             </option>
           ))}
         </select>

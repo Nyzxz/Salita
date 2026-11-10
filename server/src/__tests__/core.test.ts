@@ -9,9 +9,10 @@ import { MAX_LOGIN_ATTEMPTS } from '../auth/loginAttempts.js';
 import { loginOutcomeToHttp, GENERIC_LOGIN_ERROR } from '../auth/loginOutcome.js';
 import { COOKIE_SESSION_MARKER, buildSessionCookie, clearSessionCookie, readCookie } from '../auth/cookies.js';
 import { createToken, verifyToken } from '../auth/token.js';
-import { buildReview, parseCreateQuizRequest, scoreAnswers } from '../quizzes/quizzes.service.js';
+import { buildReview, parseCreateQuizRequest, parseGrantRetakesRequest, randomRetakePenalty, scoreAnswers } from '../quizzes/quizzes.service.js';
 import { parseGradeSubmissionRequest } from '../submissions/submissions.service.js';
 import { generateDefaultPassword, parseImportStudentsRequest } from '../admin/students.service.js';
+import { parseCreateSectionRequest } from '../admin/sections.service.js';
 import { parseMarkReadRequest } from '../notifications/notifications.service.js';
 
 const quizBody = (extra: Record<string, unknown> = {}) => ({
@@ -48,17 +49,15 @@ describe('quiz scoring', () => {
 
 describe('quiz request parsing', () => {
   it('accepts a valid quiz with settings', () => {
-    const parsed = parseCreateQuizRequest(quizBody({ maxAttempts: 2, dueDate: '2030-01-01T00:00:00.000Z', showAnswers: false }));
+    const parsed = parseCreateQuizRequest(quizBody({ randomize: true, dueDate: '2030-01-01T00:00:00.000Z' }));
     assert.ok(parsed);
-    assert.equal(parsed.maxAttempts, 2);
-    assert.equal(parsed.showAnswers, false);
+    assert.equal(parsed.randomize, true);
   });
-  it('defaults answer review to on', () => {
-    assert.equal(parseCreateQuizRequest(quizBody())?.showAnswers, true);
+  it('does not shuffle unless asked', () => {
+    assert.equal(parseCreateQuizRequest(quizBody())?.randomize, false);
   });
-  it('rejects bad attempt limits, dates and fractional points', () => {
-    assert.equal(parseCreateQuizRequest(quizBody({ maxAttempts: 0 })), null);
-    assert.equal(parseCreateQuizRequest(quizBody({ maxAttempts: 1.5 })), null);
+  it('rejects a non-boolean shuffle flag, bad dates and fractional points', () => {
+    assert.equal(parseCreateQuizRequest(quizBody({ randomize: 'yes' })), null);
     assert.equal(parseCreateQuizRequest(quizBody({ dueDate: 'not a date' })), null);
     assert.equal(parseCreateQuizRequest(quizBody({ questions: [{ questionText: 'Q', options: ['a', 'b', 'c', 'd'], correctAnswerIndex: 0, points: 1.5 }] })), null);
   });
@@ -173,5 +172,36 @@ describe('notifications', () => {
     assert.equal(parseMarkReadRequest({ all: true }), 'all');
     assert.deepEqual(parseMarkReadRequest({ ids: ['a'] }), ['a']);
     assert.equal(parseMarkReadRequest({ ids: [] }), null);
+  });
+});
+
+describe('retakes', () => {
+  it('takes 1 to 5 percentage points off, whatever the random roll', () => {
+    assert.equal(randomRetakePenalty(() => 0), 1);
+    assert.equal(randomRetakePenalty(() => 0.999999), 5);
+    for (let i = 0; i < 200; i += 1) {
+      const penalty = randomRetakePenalty();
+      assert.ok(Number.isInteger(penalty) && penalty >= 1 && penalty <= 5);
+    }
+  });
+  it('applies the penalty to the score and never goes below zero', () => {
+    const questions = [{ correctAnswerIndex: 0, points: 1 }, { correctAnswerIndex: 1, points: 1 }];
+    assert.equal(scoreAnswers(questions, [0, 1], 4).percentageScore, 96);
+    assert.equal(scoreAnswers(questions, [1, 0], 5).percentageScore, 0);
+  });
+  it('parses the list of students to unlock', () => {
+    const id = '507f1f77bcf86cd799439011';
+    assert.deepEqual(parseGrantRetakesRequest({ studentIds: [id, id] }), [id]);
+    assert.equal(parseGrantRetakesRequest({ studentIds: [] }), null);
+    assert.equal(parseGrantRetakesRequest({ studentIds: ['nope'] }), null);
+  });
+});
+
+describe('class sections', () => {
+  it('needs a real grade and a short name', () => {
+    assert.deepEqual(parseCreateSectionRequest({ grade: 'Grade 8', name: '  Sampaguita  ' }), { grade: 'Grade 8', name: 'Sampaguita' });
+    assert.equal(parseCreateSectionRequest({ grade: 'Grade 99', name: 'A' }), null);
+    assert.equal(parseCreateSectionRequest({ grade: 'Grade 8', name: '   ' }), null);
+    assert.equal(parseCreateSectionRequest({ grade: 'Grade 8', name: 'x'.repeat(41) }), null);
   });
 });

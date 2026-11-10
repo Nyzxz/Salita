@@ -1,4 +1,9 @@
 {
+  "functions": {
+    "api/auth/me.ts": {
+      "maxDuration": 60
+    }
+  },
   "headers": [
     {
       "source": "/(.*)",

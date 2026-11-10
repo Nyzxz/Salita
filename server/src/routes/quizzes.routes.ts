@@ -5,6 +5,8 @@ import {
   deleteQuiz,
   getAllQuizAttempts,
   getTeacherAnalytics,
+  grantRetakes,
+  parseGrantRetakesRequest,
   updateQuiz,
   getStudentQuizAttempts,
   listQuizzes,
@@ -87,6 +89,18 @@ quizzesRouter.post('/:quizId/start', requireAuth('STUDENT'), async (req, res, ne
     if (!result.ok) throw new ApiError(result.status, result.error);
     const body: ApiResponse<QuizStartRecord> = { success: true, data: result.data };
     res.status(200).json(body);
+  } catch (error) {
+    next(error);
+  }
+});
+
+quizzesRouter.post('/:quizId/retakes', requireAuth('TEACHER'), async (req, res, next) => {
+  try {
+    const studentIds = parseGrantRetakesRequest(req.body);
+    if (!studentIds) throw new ApiError(400, 'Choose at least one student.');
+    const result = await grantRetakes(req.params.quizId, studentIds);
+    if (!result.ok) throw new ApiError(result.status, result.error);
+    res.status(200).json({ success: true, data: result.data });
   } catch (error) {
     next(error);
   }

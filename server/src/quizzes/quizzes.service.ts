@@ -16,7 +16,8 @@ import type {
 import { connectDB } from '../config/db.js';
 import { matchesGrade, parseContentGrade } from '../grades.js';
 import { LIMITS } from '../limits.js';
-import { notifyStudentsOfGrade } from '../notifications/notifications.service.js';
+import { notifyStudentsOfGrade, notifyUsers } from '../notifications/notifications.service.js';
+import { QuizRetake } from '../models/QuizRetake.js';
 import { QuizStart } from '../models/QuizStart.js';
 import { Submission } from '../models/Submission.js';
 import { User as UserModel } from '../models/User.js';
@@ -30,7 +31,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 export function parseCreateQuizRequest(value: unknown): CreateQuizRequest | null {
   if (!isRecord(value)) return null;
-  const { title, description, timeLimitMinutes, questions, dueDate, maxAttempts, showAnswers } = value;
+  const { title, description, timeLimitMinutes, questions, dueDate, randomize } = value;
   const gradeLevel = parseContentGrade(value.gradeLevel);
   if (
     gradeLevel === null ||
@@ -46,9 +47,7 @@ export function parseCreateQuizRequest(value: unknown): CreateQuizRequest | null
     (timeLimitMinutes !== undefined &&
       (!Number.isInteger(timeLimitMinutes) || (timeLimitMinutes as number) < 1 || (timeLimitMinutes as number) > 600)) ||
     (dueDate !== undefined && dueDate !== null && (typeof dueDate !== 'string' || !Number.isFinite(Date.parse(dueDate)))) ||
-    (maxAttempts !== undefined && maxAttempts !== null &&
-      (!Number.isInteger(maxAttempts) || (maxAttempts as number) < 1 || (maxAttempts as number) > 50)) ||
-    (showAnswers !== undefined && typeof showAnswers !== 'boolean')
+    (randomize !== undefined && typeof randomize !== 'boolean')
   ) {
     return null;
   }
@@ -88,8 +87,7 @@ export function parseCreateQuizRequest(value: unknown): CreateQuizRequest | null
     gradeLevel,
     ...(timeLimitMinutes === undefined ? {} : { timeLimitMinutes: timeLimitMinutes as number }),
     ...(typeof dueDate === 'string' ? { dueDate } : {}),
-    ...(typeof maxAttempts === 'number' ? { maxAttempts } : {}),
-    showAnswers: showAnswers !== false,
+    randomize: randomize === true,
     questions: parsedQuestions as CreateQuizRequest['questions'],
   };
 }
@@ -109,8 +107,7 @@ function toQuizContent(
   description: string;
   timeLimitMinutes?: number | null;
   dueDate?: Date | null;
-  maxAttempts?: number | null;
-  showAnswers?: boolean;
+  randomize?: boolean;
   gradeLevel?: string;
   questions: Array<{ questionText: string; options: string[]; points: number; correctAnswerIndex?: number }>;
   createdBy: unknown;
@@ -124,8 +121,7 @@ function toQuizContent(
     description: quiz.description,
     ...(quiz.timeLimitMinutes ? { timeLimitMinutes: quiz.timeLimitMinutes } : {}),
     ...(quiz.dueDate ? { dueDate: quiz.dueDate.toISOString() } : {}),
-    ...(quiz.maxAttempts ? { maxAttempts: quiz.maxAttempts } : {}),
-    showAnswers: quiz.showAnswers !== false,
+    randomize: quiz.randomize === true,
     gradeLevel: (quiz.gradeLevel ?? 'ALL') as ContentGrade,
     // Correct answers are deliberately left out of what students receive.
     questions: quiz.questions.map(({ questionText, options, points, correctAnswerIndex }) => ({
@@ -151,7 +147,7 @@ type AttemptLike = Pick<
   | 'completedAt'
   | 'questions'
   | 'reviewable'
-> & { _id: unknown; quizId: unknown; studentId: unknown };
+> & { _id: unknown; quizId: unknown; studentId: unknown; penaltyPercent?: number | null };
 
 /** Builds the per-question review a student sees after finishing, from the snapshot saved with the attempt. */
 export function buildReview(
@@ -184,23 +180,34 @@ function toAttemptRecord(attempt: AttemptLike, options: { includeReview: boolean
     percentageScore: attempt.percentageScore,
     feedback: attempt.feedback,
     completedAt: attempt.completedAt.toISOString(),
+    ...(attempt.penaltyPercent ? { penaltyPercent: attempt.penaltyPercent } : {}),
     ...(options.includeReview && attempt.reviewable && attempt.questions?.length
       ? { review: buildReview(attempt.questions, attempt.userAnswers) }
       : {}),
   };
 }
 
-/** Scores answers against the questions. An unanswered question (-1) earns nothing. */
+/** A retake loses a random 1–5 percentage points. Injectable so tests can pin it. */
+export function randomRetakePenalty(random: () => number = Math.random): number {
+  return 1 + Math.floor(random() * 5);
+}
+
+/**
+ * Scores answers against the questions. An unanswered question (-1) earns nothing.
+ * `penaltyPercent` (used for retakes) comes off the percentage, never below zero.
+ */
 export function scoreAnswers(
   questions: ReadonlyArray<{ correctAnswerIndex: number; points: number }>,
   userAnswers: readonly number[],
+  penaltyPercent = 0,
 ): { scoreObtained: number; totalPossiblePoints: number; percentageScore: number; feedback: string } {
   const totalPossiblePoints = questions.reduce((sum, question) => sum + question.points, 0);
   const scoreObtained = questions.reduce(
     (sum, question, index) => sum + (userAnswers[index] === question.correctAnswerIndex ? question.points : 0),
     0,
   );
-  const percentageScore = totalPossiblePoints === 0 ? 0 : Math.round((scoreObtained / totalPossiblePoints) * 10000) / 100;
+  const raw = totalPossiblePoints === 0 ? 0 : (scoreObtained / totalPossiblePoints) * 100;
+  const percentageScore = Math.round(Math.max(0, raw - penaltyPercent) * 100) / 100;
   const feedback =
     percentageScore >= 90
       ? 'Excellent work. You have a strong grasp of this material.'
@@ -217,8 +224,7 @@ function quizFields(request: CreateQuizRequest) {
     gradeLevel: request.gradeLevel,
     timeLimitMinutes: request.timeLimitMinutes ?? null,
     dueDate: request.dueDate ? new Date(request.dueDate) : null,
-    maxAttempts: request.maxAttempts ?? null,
-    showAnswers: request.showAnswers !== false,
+    randomize: request.randomize === true,
     questions: request.questions,
   };
 }
@@ -238,7 +244,12 @@ export async function listQuizzes(viewer?: User): Promise<QuizContent[]> {
   await connectDB();
   const quizzes = await Quiz.find().sort({ createdAt: -1 }).limit(500).lean();
   const all = quizzes.map((quiz) => toQuizContent(quiz, viewer?.role === 'TEACHER'));
-  return viewer && viewer.role === 'STUDENT' ? all.filter((quiz) => matchesGrade(quiz.gradeLevel, viewer.section)) : all;
+  if (!viewer || viewer.role !== 'STUDENT') return all;
+
+  const mine = all.filter((quiz) => matchesGrade(quiz.gradeLevel, viewer.section));
+  const grants = await QuizRetake.find({ studentId: viewer.id }).select('quizId').lean();
+  const open = new Set(grants.map((grant) => String(grant.quizId)));
+  return mine.map((quiz) => (open.has(quiz.id) ? { ...quiz, retakeOpen: true } : quiz));
 }
 
 export type QuizResult<T> = { ok: true; data: T } | { ok: false; status: number; error: string };
@@ -257,45 +268,55 @@ export async function deleteQuiz(id: string): Promise<QuizResult<{ id: string }>
   await connectDB();
   const deleted = await Quiz.findByIdAndDelete(id);
   if (!deleted) return { ok: false, status: 404, error: 'Quiz not found.' };
-  await Promise.all([QuizAttempt.deleteMany({ quizId: deleted._id }), QuizStart.deleteMany({ quizId: deleted._id })]);
+  await Promise.all([
+    QuizAttempt.deleteMany({ quizId: deleted._id }),
+    QuizStart.deleteMany({ quizId: deleted._id }),
+    QuizRetake.deleteMany({ quizId: deleted._id }),
+  ]);
   return { ok: true, data: { id } };
 }
 /** Extra seconds allowed past the limit, covering network delay and clock rounding. */
 const SUBMIT_GRACE_MS = 30_000;
 
-/** A quiz needs a server-side start record when it is timed or has an attempt limit. */
-function needsStart(quiz: { timeLimitMinutes?: number | null; maxAttempts?: number | null }): boolean {
-  return Boolean(quiz.timeLimitMinutes || quiz.maxAttempts);
+/** Why a student may not open or submit this quiz right now, or null if they may. */
+async function whyBlocked(
+  quiz: { _id: unknown; dueDate?: Date | null; gradeLevel?: string },
+  user: User,
+  options: { checkDue: boolean; dueGraceMs?: number },
+): Promise<{ status: number; error: string } | null> {
+  if (!matchesGrade(quiz.gradeLevel ?? 'ALL', user.section)) {
+    return { status: 403, error: 'This quiz is not assigned to your grade level.' };
+  }
+  if (options.checkDue && quiz.dueDate && Date.now() > quiz.dueDate.getTime() + (options.dueGraceMs ?? 0)) {
+    return { status: 400, error: 'This quiz is closed — its due date has passed.' };
+  }
+  return null;
 }
 
-/** Records when a student opens a quiz; for timed quizzes this starts the server-side clock. */
+/**
+ * Opens a quiz and starts the server-side clock. Everyone gets one attempt; a second
+ * one only exists when the teacher has unlocked a retake for that student.
+ */
 export async function startQuiz(user: User, quizId: string): Promise<QuizResult<QuizStartRecord>> {
   if (!mongoose.isValidObjectId(quizId)) return { ok: false, status: 404, error: 'Quiz not found.' };
   await connectDB();
   const quiz = await Quiz.findById(quizId);
   if (!quiz) return { ok: false, status: 404, error: 'Quiz not found.' };
-  if (!matchesGrade(quiz.gradeLevel, user.section)) {
-    return { ok: false, status: 403, error: 'This quiz is not assigned to your grade level.' };
-  }
-  if (quiz.dueDate && Date.now() > quiz.dueDate.getTime()) {
-    return { ok: false, status: 400, error: 'This quiz is closed — its due date has passed.' };
-  }
-  if (quiz.maxAttempts) {
-    const used = await QuizAttempt.countDocuments({ quizId: quiz._id, studentId: user.id });
-    if (used >= quiz.maxAttempts) {
-      return { ok: false, status: 400, error: `You have used all ${quiz.maxAttempts} attempt${quiz.maxAttempts === 1 ? '' : 's'} for this quiz.` };
-    }
+  const blocked = await whyBlocked(quiz, user, { checkDue: true });
+  if (blocked) return { ok: false, ...blocked };
+
+  const alreadyTook = await QuizAttempt.exists({ quizId: quiz._id, studentId: user.id });
+  if (alreadyTook && !(await QuizRetake.exists({ quizId: quiz._id, studentId: user.id }))) {
+    return { ok: false, status: 400, error: 'You have already taken this quiz. Ask your teacher if you need a retake.' };
   }
 
   const startedAt = new Date();
-  // Every (re)start resets the clock: a retake is a fresh attempt.
-  await QuizStart.updateOne(
-    { quizId: quiz._id, studentId: user.id },
-    { $set: { startedAt } },
-    { upsert: true },
-  ).catch((error: unknown) => {
-    if (!(typeof error === 'object' && error !== null && 'code' in error && error.code === 11000)) throw error;
-  });
+  // Every (re)start resets the clock.
+  await QuizStart.updateOne({ quizId: quiz._id, studentId: user.id }, { $set: { startedAt } }, { upsert: true }).catch(
+    (error: unknown) => {
+      if (!(typeof error === 'object' && error !== null && 'code' in error && error.code === 11000)) throw error;
+    },
+  );
 
   return {
     ok: true,
@@ -320,31 +341,34 @@ export async function submitQuizAttempt(
   const quiz = await Quiz.findById(quizId);
   if (!quiz || request.userAnswers.length !== quiz.questions.length) return invalid;
   if (request.userAnswers.some((answer, index) => answer >= quiz.questions[index].options.length)) return invalid;
-  if (!matchesGrade(quiz.gradeLevel, user.section)) {
-    return { ok: false, status: 403, error: 'This quiz is not assigned to your grade level.' };
+  const blocked = await whyBlocked(quiz, user, { checkDue: true, dueGraceMs: SUBMIT_GRACE_MS });
+  if (blocked) return { ok: false, ...blocked };
+
+  // Consuming the start record is atomic, so two simultaneous submits can't both count.
+  const start = await QuizStart.findOneAndDelete({ quizId: quiz._id, studentId: user.id });
+  if (!start) {
+    return { ok: false, status: 400, error: 'Open the quiz from your quiz list before submitting it.' };
   }
-  if (quiz.dueDate && Date.now() > quiz.dueDate.getTime() + SUBMIT_GRACE_MS) {
-    return { ok: false, status: 400, error: 'This quiz is closed — its due date has passed.' };
+  if (quiz.timeLimitMinutes && Date.now() > start.startedAt.getTime() + quiz.timeLimitMinutes * 60_000 + SUBMIT_GRACE_MS) {
+    return { ok: false, status: 400, error: 'Time is up — this attempt was submitted after the time limit.' };
   }
 
-  if (needsStart(quiz)) {
-    // Consuming the start record is atomic, so two simultaneous submits can't both count as one attempt.
-    const start = await QuizStart.findOneAndDelete({ quizId: quiz._id, studentId: user.id });
-    if (!start) {
-      return { ok: false, status: 400, error: 'Open the quiz from your quiz list before submitting it.' };
+  // A second attempt needs an unlocked retake, which is used up here (also atomic).
+  const isRetake = (await QuizAttempt.exists({ quizId: quiz._id, studentId: user.id })) !== null;
+  let penaltyPercent = 0;
+  if (isRetake) {
+    const grant = await QuizRetake.findOneAndDelete({ quizId: quiz._id, studentId: user.id });
+    if (!grant) {
+      return { ok: false, status: 400, error: 'You have already taken this quiz. Ask your teacher if you need a retake.' };
     }
-    if (quiz.timeLimitMinutes && Date.now() > start.startedAt.getTime() + quiz.timeLimitMinutes * 60_000 + SUBMIT_GRACE_MS) {
-      return { ok: false, status: 400, error: 'Time is up — this attempt was submitted after the time limit. Start the quiz again to retake it.' };
-    }
-    if (quiz.maxAttempts) {
-      const used = await QuizAttempt.countDocuments({ quizId: quiz._id, studentId: user.id });
-      if (used >= quiz.maxAttempts) {
-        return { ok: false, status: 400, error: `You have used all ${quiz.maxAttempts} attempt${quiz.maxAttempts === 1 ? '' : 's'} for this quiz.` };
-      }
-    }
+    penaltyPercent = randomRetakePenalty();
   }
 
-  const { scoreObtained, totalPossiblePoints, percentageScore, feedback } = scoreAnswers(quiz.questions, request.userAnswers);
+  const { scoreObtained, totalPossiblePoints, percentageScore, feedback } = scoreAnswers(
+    quiz.questions,
+    request.userAnswers,
+    penaltyPercent,
+  );
   const attempt = await QuizAttempt.create({
     quizId: quiz._id,
     quizTitle: quiz.title,
@@ -361,9 +385,51 @@ export async function submitQuizAttempt(
       correctAnswerIndex,
       points,
     })),
-    reviewable: quiz.showAnswers !== false,
+    // Students always see where they went wrong once they are done.
+    reviewable: true,
+    ...(penaltyPercent ? { penaltyPercent } : {}),
   });
   return { ok: true, data: toAttemptRecord(attempt, { includeReview: true }) };
+}
+
+export function parseGrantRetakesRequest(value: unknown): string[] | null {
+  if (!isRecord(value)) return null;
+  const { studentIds } = value;
+  if (
+    !Array.isArray(studentIds) ||
+    studentIds.length < 1 ||
+    studentIds.length > 200 ||
+    !studentIds.every((id) => typeof id === 'string' && mongoose.isValidObjectId(id))
+  ) return null;
+  return [...new Set(studentIds as string[])];
+}
+
+/** Unlocks one more attempt on a quiz for each listed student who has already taken it. */
+export async function grantRetakes(quizId: string, studentIds: string[]): Promise<QuizResult<{ granted: number }>> {
+  if (!mongoose.isValidObjectId(quizId)) return { ok: false, status: 404, error: 'Quiz not found.' };
+  await connectDB();
+  const quiz = await Quiz.findById(quizId).select('_id title');
+  if (!quiz) return { ok: false, status: 404, error: 'Quiz not found.' };
+
+  // Only students who actually took it can need a retake.
+  const took = await QuizAttempt.distinct('studentId', { quizId: quiz._id, studentId: { $in: studentIds } });
+  if (took.length === 0) return { ok: false, status: 400, error: 'None of those students have taken this quiz yet.' };
+
+  await Promise.all(
+    took.map((studentId) =>
+      QuizRetake.updateOne({ quizId: quiz._id, studentId }, { $setOnInsert: { grantedAt: new Date() } }, { upsert: true }).catch(
+        (error: unknown) => {
+          if (!(typeof error === 'object' && error !== null && 'code' in error && error.code === 11000)) throw error;
+        },
+      ),
+    ),
+  );
+  await notifyUsers(took.map(String), {
+    title: 'Retake unlocked',
+    body: `Your teacher opened a retake for “${quiz.title}”. Your score will be reduced by 1–5%.`,
+    link: '/dashboard/student#quizzes',
+  });
+  return { ok: true, data: { granted: took.length } };
 }
 
 /** A student's own attempts, newest first, with answer review where the quiz allows it. */
@@ -391,9 +457,19 @@ export async function getAllQuizAttempts(options: { skip?: number; limit?: numbe
       .lean(),
     QuizAttempt.countDocuments(filter),
   ]);
+  const grants = await QuizRetake.find({
+    quizId: { $in: [...new Set(attempts.map((attempt) => String(attempt.quizId)))] },
+    studentId: { $in: [...new Set(attempts.map((attempt) => String(attempt.studentId)))] },
+  })
+    .select('quizId studentId')
+    .lean();
+  const open = new Set(grants.map((grant) => `${String(grant.quizId)}:${String(grant.studentId)}`));
   return {
     total,
-    items: attempts.map((attempt) => toAttemptRecord({ ...attempt, questions: [] } as unknown as AttemptLike, { includeReview: false })),
+    items: attempts.map((attempt) => ({
+      ...toAttemptRecord({ ...attempt, questions: [] } as unknown as AttemptLike, { includeReview: false }),
+      ...(open.has(`${String(attempt.quizId)}:${String(attempt.studentId)}`) ? { retakeOpen: true } : {}),
+    })),
   };
 }
 

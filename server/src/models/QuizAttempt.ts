@@ -15,6 +15,8 @@ export interface IQuizAttempt extends Document {
   questions: Array<{ questionText: string; options: string[]; correctAnswerIndex: number; points: number }>;
   /** Whether the student may review correct answers for this attempt. */
   reviewable: boolean;
+  /** Percentage points deducted because this was a retake. */
+  penaltyPercent?: number;
 }
 
 const quizAttemptSchema = new Schema<IQuizAttempt>(
@@ -42,6 +44,7 @@ const quizAttemptSchema = new Schema<IQuizAttempt>(
       default: [],
     },
     reviewable: { type: Boolean, default: false },
+    penaltyPercent: { type: Number, min: 0, max: 100 },
   },
   { timestamps: false },
 );
