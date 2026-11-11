@@ -118,7 +118,7 @@ npm run format          # Prettier, writes in place
 | Performance Tasks | `PERFORMANCE_TASK` tasks, with an optional file attachment |
 | My Grades | Everything submitted, with score and feedback once graded |
 
-The student's initials (top right) open a menu with **Profile management** (edit name/email) and **Log out**. Students cannot change their own password after the first sign-in; the teacher resets it.
+The student's initials (top right) open a menu with **Profile management** (edit name/email, pick an avatar colour; username, grade and section are shown read-only) and **Log out**. Students cannot change their own password after the first sign-in; the teacher resets it.
 
 New or reset accounts must change their default password before anything else
 works (enforced on the server, not just the UI). A notification bell shows new
@@ -294,3 +294,12 @@ and editor cruft, so nothing generated gets committed.
 - **Persistence:** MongoDB stores users, authored learning content, submissions,
   grades, and quiz attempts. Keep `MONGO_URI` and `AUTH_SECRET` in deployment
   environment settings, not in source control.
+
+
+## Update 6 notes (QA pass)
+
+- Dates use one format everywhere (`client/src/lib/dates.ts`), deadline fields show your time zone, and a grade with a section reads “Grade 12 · Mabini”.
+- Tasks show a notice when past due (late work is accepted and marked late) and keep an unsent draft in the browser.
+- The student Quizzes tab no longer has Practice or the attempt table; “Review my answers” sits on each finished quiz card.
+- Avatars: six colour presets for students and teachers (`avatar` on the user, saved through `PUT /api/auth/me`). Image uploads are not supported.
+- Reactivating a deactivated account also lifts a sign-in lockout.

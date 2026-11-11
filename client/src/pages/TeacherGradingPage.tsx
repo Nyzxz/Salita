@@ -1,4 +1,6 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
+import { AutoTextarea } from '../components/ui/AutoTextarea';
+import { formatDateTime } from '../lib/dates';
 import type { ActivityTask, QuizAttemptRecord, SubmissionRecord, TaskType } from '@shared/types';
 import { ErrorState } from '../components/common/ErrorState';
 import { LoadingState } from '../components/common/LoadingState';
@@ -391,7 +393,7 @@ export function TeacherGradingPage() {
                           {task && <div className="mt-0.5 text-xs text-muted">{task.totalPoints} points total</div>}
                         </td>
                         <td className="whitespace-nowrap text-muted">
-                          {new Date(submission.submittedAt).toLocaleString()}
+                          {formatDateTime(submission.submittedAt)}
                         </td>
                         <td className="whitespace-nowrap">
                           <input
@@ -406,7 +408,7 @@ export function TeacherGradingPage() {
                           {task && <span className="ml-2 text-xs text-muted">/ {task.totalPoints}</span>}
                         </td>
                         <td>
-                          <textarea
+                          <AutoTextarea
                             value={draft.feedback}
                             onChange={(event) =>
                               handleDraftChange(submission.id, 'feedback', event.target.value)
@@ -415,7 +417,7 @@ export function TeacherGradingPage() {
                             maxLength={LIMITS.feedback}
                             aria-label={`Feedback for ${submission.studentName}`}
                             placeholder="Leave feedback for the student"
-                            className="field min-w-[220px]"
+                            className="field min-w-[260px]"
                           />
                         </td>
                         <td>
@@ -469,7 +471,7 @@ export function TeacherGradingPage() {
           Quiz results
         </h2>
         <p className="mt-1 text-sm text-muted">
-          Each student gets one attempt. Tick the students who may try again and press “Allow retake” — a retake loses a random 1–5%.
+          Each student gets one attempt. Tick the students who may try again and press “Allow retake” — the retake score is reduced by a random 1–5 percentage points (for example, 80% becomes 75–79%).
         </p>
         <div className="mt-4 flex flex-wrap items-center gap-3">
           <button type="button" className="btn-primary btn-sm" disabled={selectedAttempts.size === 0 || isGranting} onClick={() => void allowRetakes()}>
@@ -518,7 +520,7 @@ export function TeacherGradingPage() {
                         {attempt.penaltyPercent ? <span className="badge-neutral ml-2">retake −{attempt.penaltyPercent}%</span> : null}
                         {attempt.retakeOpen ? <span className="badge-gold ml-2">Retake unlocked</span> : null}
                       </td>
-                      <td className="text-muted">{new Date(attempt.completedAt).toLocaleString()}</td>
+                      <td className="text-muted">{formatDateTime(attempt.completedAt)}</td>
                     </tr>
                   ))}
                 </tbody>

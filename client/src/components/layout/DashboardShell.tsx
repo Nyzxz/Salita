@@ -1,7 +1,8 @@
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../auth/AuthContext';
 import { Avatar } from '../common/Avatar';
+import { AvatarPicker } from '../profile/AvatarPicker';
 import { Brand } from '../common/Brand';
 import { LogOutIcon } from '../common/icons';
 import { NotificationBell } from '../common/NotificationBell';
@@ -22,6 +23,7 @@ const ROLE_LABEL = { STUDENT: 'Student', TEACHER: 'Teacher' } as const;
 export function DashboardShell({ title, subtitle, eyebrow = 'Teacher workspace', actions, children }: DashboardShellProps) {
   const { session, logout } = useAuth();
   const navigate = useNavigate();
+  const [pickerOpen, setPickerOpen] = useState(false);
 
   const handleSignOut = () => {
     logout();
@@ -40,7 +42,22 @@ export function DashboardShell({ title, subtitle, eyebrow = 'Teacher workspace',
                 <p className="text-sm font-medium text-parchment">{session?.user.name}</p>
                 <p className="text-xs text-gold-soft">{session ? ROLE_LABEL[session.user.role] : ''}</p>
               </div>
-              <Avatar name={session?.user.name ?? '?'} size="sm" />
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setPickerOpen((value) => !value)}
+                  aria-expanded={pickerOpen}
+                  aria-label="Change avatar colour"
+                  className="rounded-full transition hover:ring-2 hover:ring-gold/40"
+                >
+                  <Avatar name={session?.user.name ?? '?'} size="sm" preset={session?.user.avatar} />
+                </button>
+                {pickerOpen && (
+                  <div className="surface absolute right-0 top-full z-40 mt-2 w-64 p-4 shadow-xl">
+                    <AvatarPicker />
+                  </div>
+                )}
+              </div>
             </div>
             <NotificationBell />
             <span aria-hidden="true" className="hidden h-6 w-px bg-night-border sm:block" />

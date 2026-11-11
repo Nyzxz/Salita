@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { formatDate, gradeWithSection } from '../../lib/dates';
 import type { StudentAccount } from '@shared/types';
 import { Avatar } from '../common/Avatar';
 import { TrashIcon, UsersIcon } from '../common/icons';
@@ -11,10 +12,6 @@ interface StudentDirectoryTableProps {
   onToggleStatus: (student: StudentAccount) => void;
   onResetPassword: (student: StudentAccount, newPassword: string) => void;
   onDelete: (student: StudentAccount) => void;
-}
-
-function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
 }
 
 export function StudentDirectoryTable({
@@ -45,7 +42,7 @@ export function StudentDirectoryTable({
 
   return (
     <div className="table-wrap overflow-x-auto">
-      <table className="data-table">
+      <table className="data-table min-w-[860px]">
         <thead>
           <tr>
             <th>Student</th>
@@ -70,7 +67,9 @@ export function StudentDirectoryTable({
                     </div>
                   </div>
                 </td>
-                <td className="text-muted">{student.section}{student.classSection ? <span className="badge-neutral ml-2">{student.classSection}</span> : null}</td>
+                <td className="whitespace-nowrap text-muted" title={gradeWithSection(student.section, student.classSection)}>
+                  {gradeWithSection(student.section, student.classSection)}
+                </td>
                 <td className="whitespace-nowrap text-muted">{formatDate(student.createdAt)}</td>
                 <td>
                   <div className="flex flex-col items-start gap-1.5">
@@ -80,7 +79,7 @@ export function StudentDirectoryTable({
                     {student.mustChangePassword && <span className="badge-gold">Default password</span>}
                   </div>
                 </td>
-                <td>
+                <td className="whitespace-nowrap">
                   {isResetting ? (
                     <div className="flex items-center gap-2">
                       <input

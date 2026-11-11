@@ -9,13 +9,23 @@ function greetingFor(hour: number): string {
   return 'Good evening';
 }
 
+const TITLES = new Set(['mr', 'mrs', 'ms', 'miss', 'mx', 'dr', 'prof', 'sir', 'maam', "ma'am", 'engr', 'atty']);
+
+/** “Ms. Reyes” stays “Ms. Reyes”; “Maria Reyes” becomes “Maria”. */
+export function greetingName(fullName: string | undefined): string {
+  const parts = (fullName ?? '').trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return 'there';
+  const isTitle = TITLES.has(parts[0].replace(/\./g, '').toLowerCase());
+  return isTitle && parts.length > 1 ? `${parts[0]} ${parts[1]}` : parts[0];
+}
+
 export function TeacherDashboard() {
   const { session } = useAuth();
-  const firstName = session?.user.name.split(' ')[0] ?? 'there';
+  const callName = greetingName(session?.user.name);
 
   return (
     <DashboardShell
-      title={`${greetingFor(new Date().getHours())}, ${firstName}`}
+      title={`${greetingFor(new Date().getHours())}, ${callName}`}
       subtitle="Manage your classroom, publish learning content, and review student progress — all in one place."
     >
       <ModuleGrid

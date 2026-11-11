@@ -215,7 +215,14 @@ export async function editStudent(
         return { ok: false, status: 400, error: `${record.section} has no section called “${patch.classSection}”.` };
       }
     }
-    if (patch.status !== undefined) record.status = patch.status;
+    if (patch.status !== undefined) {
+      record.status = patch.status;
+      // Reactivating an account also lifts any sign-in lockout.
+      if (patch.status === 'ACTIVE') {
+        record.failedLoginAttempts = 0;
+        record.lockedUntil = null;
+      }
+    }
     if (patch.password !== undefined) {
       record.password = patch.password;
       // A teacher-set password is a default again: force a change at next sign-in.

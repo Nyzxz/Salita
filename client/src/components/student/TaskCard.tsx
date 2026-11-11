@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react';
+import { formatDateTime } from '../../lib/dates';
 import type { ActivityTask, SubmissionRecord } from '@shared/types';
 import { ClockIcon, PaperclipIcon, TargetIcon } from '../common/icons';
 import { downloadAttachment, uploadAttachment } from '../../api/tasks';
@@ -30,12 +31,30 @@ function readAsBase64(file: File): Promise<string> {
   });
 }
 
-function formatDueDate(iso: string): string {
-  return new Date(iso).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+const formatDueDate = formatDateTime;
+
+/** Unsent text is kept in this browser so a stray click or refresh doesn't lose it. */
+function draftKey(taskId: string): string {
+  return `salita.draft.${taskId}`;
+}
+function loadDraft(taskId: string): string {
+  try {
+    return window.localStorage.getItem(draftKey(taskId)) ?? '';
+  } catch {
+    return '';
+  }
+}
+function saveDraft(taskId: string, text: string): void {
+  try {
+    if (text) window.localStorage.setItem(draftKey(taskId), text);
+    else window.localStorage.removeItem(draftKey(taskId));
+  } catch {
+    /* storage unavailable: drafts are a convenience only */
+  }
 }
 
 export function TaskCard({ task, submission, onSubmit }: TaskCardProps) {
-  const [content, setContent] = useState(submission?.submittedContent ?? '');
+  const [content, setContent] = useState(submission?.submittedContent ?? loadDraft(task.id));
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [file, setFile] = useState<File | null>(null);
@@ -43,6 +62,13 @@ export function TaskCard({ task, submission, onSubmit }: TaskCardProps) {
   const canAttach = task.type === 'PERFORMANCE_TASK';
 
   const isOverdue = new Date(task.dueDate).getTime() < Date.now() && !submission;
+  const isPastDue = new Date(task.dueDate).getTime() < Date.now();
+  const hasDraft = !submission && content.length > 0;
+
+  const handleChange = (text: string) => {
+    setContent(text);
+    saveDraft(task.id, text);
+  };
 
   const handleSubmit = async () => {
     if (content.trim().length === 0) return;
@@ -60,6 +86,7 @@ export function TaskCard({ task, submission, onSubmit }: TaskCardProps) {
         attachmentId = info.id;
       }
       await onSubmit(task.id, content.trim(), attachmentId);
+      saveDraft(task.id, '');
       setFile(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not submit. Try again.');
@@ -108,12 +135,18 @@ export function TaskCard({ task, submission, onSubmit }: TaskCardProps) {
         <textarea
           id={`submission-${task.id}`}
           value={content}
-          onChange={(event) => setContent(event.target.value)}
+          onChange={(event) => handleChange(event.target.value)}
           rows={4}
           maxLength={LIMITS.submission}
           className="field"
           placeholder="Write your response here…"
         />
+        {isPastDue && (
+          <p className="rounded-xl border border-gold/25 bg-gold/5 px-3 py-2 text-xs text-parchment/90">
+            This is past its due date. You can still submit, but your teacher will see it marked as late.
+          </p>
+        )}
+        {hasDraft && <p className="text-xs text-muted">Draft saved in this browser until you submit.</p>}
         {canAttach && (
           <div className="mt-1 flex flex-wrap items-center gap-2 text-sm">
             <input

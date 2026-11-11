@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { formatDateTime } from '../../lib/dates';
 import type { QuizAttemptRecord, QuizContent } from '@shared/types';
 import { useAuth } from '../../auth/AuthContext';
 import {
@@ -15,7 +16,7 @@ import { gradeLabel } from '../ui/GradeSelect';
 import { Notice } from '../ui/Notice';
 import { PageIntro } from '../ui/PageIntro';
 import { QuizReview } from './QuizReview';
-import { ArrowLeftIcon, ArrowRightIcon, CheckIcon, ClockIcon, InboxIcon, QuizIcon } from '../common/icons';
+import { ArrowLeftIcon, ArrowRightIcon, CheckIcon, ClockIcon, QuizIcon } from '../common/icons';
 
 interface QuestionLayout {
   /** Index of the question in the quiz as the teacher wrote it. */
@@ -267,14 +268,16 @@ export function AssignedQuizzes() {
                 <div className="mt-4 flex flex-wrap gap-2">
                   <span className="badge-gold">{gradeLabel(quiz.gradeLevel)}</span>
                   <span className="badge-neutral">{quiz.questions.length} questions</span>
-                  {quiz.timeLimitMinutes ? <span className="badge-neutral"><ClockIcon className="h-3 w-3" />{quiz.timeLimitMinutes} min</span> : null}
+                  <span className="badge-neutral"><ClockIcon className="h-3 w-3" />{quiz.timeLimitMinutes ? `${quiz.timeLimitMinutes} min` : 'No time limit'}</span>
                   {previous ? <span className="badge-leaf">Last score {previous.percentageScore}%</span> : null}
                   {quiz.dueDate ? (
                     <span className={isClosed ? 'badge-clay' : 'badge-neutral'}>
-                      {isClosed ? 'Closed' : 'Due'} {new Date(quiz.dueDate).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}
+                      {isClosed ? 'Closed' : 'Due'} {formatDateTime(quiz.dueDate)}
                     </span>
-                  ) : null}
-                  {quiz.retakeOpen ? <span className="badge-gold">Retake unlocked · score −1 to 5%</span> : null}
+                  ) : (
+                    <span className="badge-neutral">No closing date</span>
+                  )}
+                  {quiz.retakeOpen ? <span className="badge-gold">Retake unlocked · 1–5% comes off your score</span> : null}
                   {isDone ? <span className="badge-neutral">Completed</span> : null}
                 </div>
                 {isDone && previous ? (
@@ -293,46 +296,15 @@ export function AssignedQuizzes() {
         </ul>
       )}
 
-      <div>
-        <h3 className="mb-4 text-lg font-semibold text-parchment">Attempt history</h3>
-        {attempts.length === 0 ? (
-          <EmptyState icon={<InboxIcon />} title="No attempts yet" description="Your completed quizzes will appear here." />
-        ) : (
-          <div className="table-wrap overflow-x-auto">
-            <table className="data-table">
-              <thead>
-                <tr><th>Quiz</th><th>Score</th><th>Completed</th><th><span className="sr-only">Review</span></th></tr>
-              </thead>
-              <tbody>
-                {attempts.map((attempt) => (
-                  <tr key={attempt.id}>
-                    <td className="font-medium text-parchment">{attempt.quizTitle}</td>
-                    <td>
-                      <span className={attempt.percentageScore >= 75 ? 'badge-leaf' : attempt.percentageScore >= 50 ? 'badge-gold' : 'badge-clay'}>
-                        {attempt.percentageScore}%
-                      </span>
-                      <span className="ml-2 text-xs text-muted">{attempt.scoreObtained}/{attempt.totalPossiblePoints}</span>
-                    </td>
-                    <td className="text-muted">{new Date(attempt.completedAt).toLocaleString()}</td>
-                    <td>
-                      {attempt.review ? (
-                        <button type="button" className="btn-ghost btn-sm" onClick={() => setReviewing(reviewing?.id === attempt.id ? null : attempt)}>
-                          {reviewing?.id === attempt.id ? 'Hide review' : 'Review answers'}
-                        </button>
-                      ) : null}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+      {reviewing && (
+        <div className="surface animate-fade-in p-5 sm:p-6">
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <h3 className="text-lg font-semibold text-parchment">{reviewing.quizTitle} — your answers</h3>
+            <button type="button" className="btn-ghost btn-sm" onClick={() => setReviewing(null)}>Close</button>
           </div>
-        )}
-        {reviewing && (
-          <div className="surface mt-5 animate-fade-in p-5 sm:p-6">
-            <QuizReview attempt={reviewing} />
-          </div>
-        )}
-      </div>
+          <QuizReview attempt={reviewing} />
+        </div>
+      )}
     </section>
   );
 }

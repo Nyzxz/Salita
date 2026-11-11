@@ -7,7 +7,6 @@ import { StudentTopNav } from '../components/student/StudentTopNav';
 import { StudentSidebar, type StudentTab } from '../components/student/StudentSidebar';
 import { StudentOverview } from '../components/student/StudentOverview';
 import { TaskListSection } from '../components/student/TaskListSection';
-import { QuizModule } from '../components/quiz/QuizModule';
 import { VocabExplorer } from '../components/vocab/VocabExplorer';
 import { useTasksAndSubmissions } from '../hooks/useTasksAndSubmissions';
 import { AssignedQuizzes } from '../components/quiz/AssignedQuizzes';
@@ -61,7 +60,7 @@ export function StudentDashboard() {
       />
 
       <div className="mx-auto grid w-full max-w-[1400px] flex-1 gap-6 px-4 py-8 sm:px-6 lg:grid-cols-[220px_minmax(0,1fr)] lg:gap-10 lg:py-10 xl:px-8">
-        <StudentSidebar activeTab={activeTab === 'profile' ? 'dashboard' : activeTab} onChangeTab={changeTab} />
+        <StudentSidebar activeTab={activeTab} onChangeTab={changeTab} />
         <main className="min-w-0">
         <div key={activeTab} className="animate-fade-in-up">
           {activeTab === 'dashboard' && (
@@ -74,10 +73,7 @@ export function StudentDashboard() {
             </div>
           )}
           {activeTab === 'quizzes' && (
-            <div className="flex flex-col gap-14">
-              <AssignedQuizzes />
-              <QuizModule />
-            </div>
+            <AssignedQuizzes />
           )}
           {activeTab === 'activities' && (
             <TaskListSection

@@ -1,7 +1,11 @@
+import { avatarClass } from '../../lib/avatars';
+
 interface AvatarProps {
   name: string;
   size?: 'sm' | 'md' | 'lg';
   accent?: 'gold' | 'leaf';
+  /** A preset id the user picked; overrides `accent`. */
+  preset?: string;
 }
 
 const SIZE_CLASSES = {
@@ -18,11 +22,10 @@ function initialsFor(name: string): string {
 }
 
 /** Initials in a ringed circle, standing in for a photo avatar. */
-export function Avatar({ name, size = 'md', accent = 'gold' }: AvatarProps) {
+export function Avatar({ name, size = 'md', accent = 'gold', preset }: AvatarProps) {
   const tone =
-    accent === 'gold'
-      ? 'from-gold-soft to-gold text-night'
-      : 'from-leaf to-[#6fbf8e] text-night';
+    avatarClass(preset) ??
+    (accent === 'gold' ? 'from-gold-soft to-gold text-night' : 'from-leaf to-[#6fbf8e] text-night');
 
   return (
     <span

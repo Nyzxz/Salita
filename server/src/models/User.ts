@@ -12,6 +12,7 @@ export interface UserDocument extends Document {
   role: UserRole;
   section?: string;
   classSection?: string;
+  avatar?: string;
   status: AccountStatus;
   createdAt: Date;
   failedLoginAttempts: number;
@@ -31,6 +32,7 @@ const userSchema = new Schema<UserDocument>(
     role: { type: String, enum: ['STUDENT', 'TEACHER'], required: true },
     section: { type: String, trim: true },
     classSection: { type: String, trim: true, maxlength: 40 },
+    avatar: { type: String, trim: true, maxlength: 20 },
     status: { type: String, enum: ['ACTIVE', 'INACTIVE'], default: 'ACTIVE', required: true },
     failedLoginAttempts: { type: Number, default: 0, required: true },
     mustChangePassword: { type: Boolean, default: false, required: true },

@@ -2,6 +2,8 @@ import { useState, type FormEvent } from 'react';
 import { updateMyProfile } from '../../api/auth';
 import { ApiRequestError } from '../../api/client';
 import { useAuth } from '../../auth/AuthContext';
+import { gradeWithSection } from '../../lib/dates';
+import { AvatarPicker } from './AvatarPicker';
 import { Avatar } from '../common/Avatar';
 import { PageIntro } from '../ui/PageIntro';
 import { Notice } from '../ui/Notice';
@@ -47,18 +49,21 @@ export function ProfileSection() {
       />
 
       <div className="surface flex flex-wrap items-center gap-5 p-6">
-        <Avatar name={user.name} size="lg" accent="leaf" />
+        <Avatar name={user.name} size="lg" accent="leaf" preset={user.avatar} />
         <div className="min-w-0">
           <p className="truncate text-xl font-semibold text-parchment">{user.name}</p>
           <p className="mt-1 text-sm text-muted">@{user.username}</p>
         </div>
         <div className="ml-auto flex flex-wrap gap-2">
           <span className="badge-leaf">Student</span>
-          {user.section && <span className="badge-gold">{user.section}</span>}
+          {user.section && <span className="badge-gold">{gradeWithSection(user.section, user.classSection)}</span>}
         </div>
       </div>
 
       <div className="max-w-2xl">
+        <div className="surface mb-6 p-6">
+          <AvatarPicker />
+        </div>
         <form onSubmit={handleSave} className="surface flex flex-col gap-5 p-6" aria-labelledby="details-heading">
           <div>
             <h3 id="details-heading" className="text-lg font-semibold text-parchment">Personal details</h3>
@@ -73,16 +78,21 @@ export function ProfileSection() {
             <span className="field-label">Email address</span>
             <input required type="email" maxLength={254} value={email} onChange={(event) => setEmail(event.target.value)} className="field" />
           </label>
-          <div className="grid gap-5 sm:grid-cols-2">
-            <label className="block">
-              <span className="field-label">Username</span>
-              <input value={user.username} readOnly disabled className="field cursor-not-allowed opacity-60" />
-            </label>
-            <label className="block">
-              <span className="field-label">Grade</span>
-              <input value={user.section ?? 'Not set'} readOnly disabled className="field cursor-not-allowed opacity-60" />
-            </label>
-          </div>
+          <dl className="grid gap-4 rounded-xl border border-night-border bg-white/[0.02] p-4 sm:grid-cols-3">
+            <div>
+              <dt className="text-xs text-muted">Username</dt>
+              <dd className="mt-0.5 text-sm font-medium text-parchment">@{user.username}</dd>
+            </div>
+            <div>
+              <dt className="text-xs text-muted">Grade</dt>
+              <dd className="mt-0.5 text-sm font-medium text-parchment">{user.section ?? 'Not set'}</dd>
+            </div>
+            <div>
+              <dt className="text-xs text-muted">Section</dt>
+              <dd className="mt-0.5 text-sm font-medium text-parchment">{user.classSection ?? 'Not set'}</dd>
+            </div>
+          </dl>
+          <p className="-mt-2 text-xs text-muted">These three are set by your teacher and can’t be edited here.</p>
 
           {error && <Notice tone="error">{error}</Notice>}
           {saved && !hasChanges && <Notice tone="success">Profile saved.</Notice>}

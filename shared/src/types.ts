@@ -246,12 +246,16 @@ export interface User {
   classSection?: string;
   /** True until a student replaces the default password a teacher gave them. */
   mustChangePassword?: boolean;
+  /** Chosen avatar colour preset; initials are drawn on it. Unset means the default. */
+  avatar?: string;
 }
 
 /** Body of PUT /api/auth/me — a signed-in user editing their own profile. */
 export interface UpdateProfileRequest {
   fullName?: string;
   email?: string;
+  /** An avatar preset id, or an empty string to go back to the default. */
+  avatar?: string;
 }
 
 /** Body of POST /api/auth/me?action=password. Responds with a fresh AuthSession. */

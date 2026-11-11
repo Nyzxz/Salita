@@ -28,7 +28,7 @@ export const TASKS: ActivityTask[] = [
     id: 'task-perf-1',
     type: 'PERFORMANCE_TASK',
     gradeLevel: 'ALL',
-    title: 'Record a 1-minute self-introduction',
+    title: 'Write a 1-minute self-introduction',
     description:
       'Write a short self-introduction script in Filipino (name, where you are learning from, one ' +
       'thing you like) using at least three words from the Greetings or Phrases categories. Submit ' +

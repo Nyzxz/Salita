@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from 'react';
+import { formatDateTime, timeZoneName } from '../../lib/dates';
 import {
   VALID_CATEGORIES,
   type ActivityTask,
@@ -342,7 +343,7 @@ function QuizBuilder() {
               <Field label="Time limit (minutes, optional)">
                 <input type="number" min={1} max={600} value={timeLimit} onChange={(event) => setTimeLimit(event.target.value)} className="field" />
               </Field>
-              <Field label="Closes on (optional)">
+              <Field label={`Closes on (optional, ${timeZoneName()} time)`}>
                 <input type="datetime-local" value={dueDate} onChange={(event) => setDueDate(event.target.value)} className="field" />
               </Field>
             </div>
@@ -354,7 +355,7 @@ function QuizBuilder() {
               </span>
             </label>
             <p className="rounded-xl border border-white/10 bg-white/[0.03] p-3 text-xs leading-relaxed text-muted">
-              Each student gets one attempt and sees their results with the correct answers right after submitting. To let a student retake it, open the Grading Center, choose the student(s) and press “Allow retake” — a retake loses a random 1–5%.
+              Each student gets one attempt and sees their results with the correct answers right after submitting. To let a student retake it, open the Grading Center, choose the student(s) and press “Allow retake” — the retake score is reduced by a random 1–5 percentage points (for example, 80% becomes 75–79%).
             </p>
           </div>
 
@@ -375,19 +376,33 @@ function QuizBuilder() {
               <Field label="Prompt">
                 <input maxLength={LIMITS.question} required value={question.questionText} onChange={(event) => updateQuestion(questionIndex, { questionText: event.target.value })} className="field" />
               </Field>
-              <div className="grid gap-3 sm:grid-cols-2">
-                {question.options.map((option, optionIndex) => (
-                  <Field key={optionIndex} label={`Option ${String.fromCharCode(65 + optionIndex)}${question.correctAnswerIndex === optionIndex ? ' · correct' : ''}`}>
-                    <input required maxLength={LIMITS.option} value={option} onChange={(event) => updateOption(questionIndex, optionIndex, event.target.value)} className="field" />
-                  </Field>
-                ))}
-              </div>
+              <fieldset className="flex flex-col gap-2">
+                <legend className="field-label">Options — choose the correct one with the round button</legend>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {question.options.map((option, optionIndex) => (
+                    <div key={optionIndex} className="flex items-center gap-2">
+                      <input
+                        type="radio"
+                        name={`correct-${questionIndex}`}
+                        checked={question.correctAnswerIndex === optionIndex}
+                        onChange={() => updateQuestion(questionIndex, { correctAnswerIndex: optionIndex })}
+                        aria-label={`Option ${String.fromCharCode(65 + optionIndex)} is the correct answer`}
+                        className="h-4 w-4 flex-none accent-gold"
+                      />
+                      <input
+                        required
+                        maxLength={LIMITS.option}
+                        value={option}
+                        onChange={(event) => updateOption(questionIndex, optionIndex, event.target.value)}
+                        placeholder={`Option ${String.fromCharCode(65 + optionIndex)}`}
+                        aria-label={`Option ${String.fromCharCode(65 + optionIndex)}`}
+                        className={`field ${question.correctAnswerIndex === optionIndex ? 'border-gold/60' : ''}`}
+                      />
+                    </div>
+                  ))}
+                </div>
+              </fieldset>
               <div className="flex flex-wrap gap-4">
-                <Field label="Correct answer">
-                  <select value={question.correctAnswerIndex} onChange={(event) => updateQuestion(questionIndex, { correctAnswerIndex: Number(event.target.value) })} className="field">
-                    {question.options.map((_, optionIndex) => <option key={optionIndex} value={optionIndex}>Option {String.fromCharCode(65 + optionIndex)}</option>)}
-                  </select>
-                </Field>
                 <Field label="Points">
                   <input type="number" min={1} step={1} required value={question.points} onChange={(event) => updateQuestion(questionIndex, { points: Number(event.target.value) })} className="field w-28" />
                 </Field>
@@ -416,7 +431,7 @@ function QuizBuilder() {
         items={quizzes.map((quiz) => ({
           id: quiz.id,
           title: quiz.title,
-          detail: `${quiz.questions.length} questions${quiz.randomize ? ' · shuffled' : ''}${quiz.dueDate ? ` · closes ${new Date(quiz.dueDate).toLocaleDateString()}` : ''}`,
+          detail: `${quiz.questions.length} questions${quiz.randomize ? ' · shuffled' : ''}${quiz.timeLimitMinutes ? ` · ${quiz.timeLimitMinutes} min` : ' · no time limit'} · ${quiz.dueDate ? `closes ${formatDateTime(quiz.dueDate)}` : 'never closes'}`,
           grade: quiz.gradeLevel,
         }))}
         isLoading={isLoading}
@@ -601,7 +616,7 @@ function ActivityTaskBuilder() {
         <GradeSelect value={gradeLevel} onChange={setGradeLevel} className="sm:col-span-2" />
         <Field label="Total points"><input type="number" min={1} step={1} required value={totalPoints} onChange={(event) => setTotalPoints(Number(event.target.value))} className="field" /></Field>
         <Field label="Detailed instructions / prompt" className="sm:col-span-2"><textarea maxLength={LIMITS.long} required rows={5} value={description} onChange={(event) => setDescription(event.target.value)} className="field" /></Field>
-        <Field label="Due date"><input type="datetime-local" required value={dueDate} onChange={(event) => setDueDate(event.target.value)} className="field" /></Field>
+        <Field label={`Due date (${timeZoneName()} time)`}><input type="datetime-local" required value={dueDate} onChange={(event) => setDueDate(event.target.value)} className="field" /></Field>
         {error && <Notice tone="error" className="sm:col-span-2">{error}</Notice>}
         {notice && <Notice tone="success" className="sm:col-span-2">{notice}</Notice>}
         <div className="sm:col-span-2">
@@ -617,7 +632,7 @@ function ActivityTaskBuilder() {
       items={tasks.map((item) => ({
         id: item.id,
         title: item.title,
-        detail: `${item.type === 'ACTIVITY' ? 'Activity' : 'Performance task'} · ${item.totalPoints} pts · due ${new Date(item.dueDate).toLocaleDateString()}`,
+        detail: `${item.type === 'ACTIVITY' ? 'Activity' : 'Performance task'} · ${item.totalPoints} pts · due ${formatDateTime(item.dueDate)}`,
         grade: item.gradeLevel,
       }))}
       isLoading={isLoading}

@@ -1,4 +1,5 @@
 import { timingSafeEqual } from 'node:crypto';
+import { isAvatarId } from '../avatars.js';
 import bcrypt from 'bcryptjs';
 import type {
   AuthSession,
@@ -54,6 +55,7 @@ function toPublicUser(record: UserDocument): User {
     ...(record.section ? { section: record.section } : {}),
     ...(record.classSection ? { classSection: record.classSection } : {}),
     mustChangePassword: record.mustChangePassword === true,
+    ...(record.avatar ? { avatar: record.avatar } : {}),
   };
 }
 
@@ -241,8 +243,12 @@ export type AccountResult<T> = { ok: true; data: T } | { ok: false; status: numb
 
 export function parseUpdateProfileRequest(body: unknown): UpdateProfileRequest | null {
   if (typeof body !== 'object' || body === null) return null;
-  const { fullName, email } = body as Record<string, unknown>;
+  const { fullName, email, avatar } = body as Record<string, unknown>;
   const result: UpdateProfileRequest = {};
+  if (avatar !== undefined) {
+    if (avatar !== '' && !isAvatarId(avatar)) return null;
+    result.avatar = avatar;
+  }
   if (fullName !== undefined) {
     if (typeof fullName !== 'string' || fullName.trim().length === 0 || fullName.trim().length > 120) return null;
     result.fullName = fullName.trim();
@@ -284,6 +290,7 @@ export async function updateProfile(userId: string, patch: UpdateProfileRequest)
   if (!record) return { ok: false, status: 404, error: 'Account not found.' };
   if (patch.fullName !== undefined) record.fullName = patch.fullName;
   if (patch.email !== undefined) record.email = patch.email.toLowerCase();
+  if (patch.avatar !== undefined) record.avatar = patch.avatar === '' ? undefined : patch.avatar;
   try {
     await record.save();
   } catch (error) {

@@ -10,18 +10,8 @@ export function AudioButton({ audioUrl, label }: AudioButtonProps) {
   const [isPlaying, setIsPlaying] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
-  if (!audioUrl) {
-    return (
-      <span
-        title="Pronunciation audio coming soon"
-        aria-disabled="true"
-        className="inline-flex flex-none cursor-not-allowed items-center gap-1.5 rounded-full border border-night-border bg-white/[0.02] px-3 py-1.5 text-xs text-muted"
-      >
-        <SpeakerIcon className="h-3.5 w-3.5" />
-        Audio soon
-      </span>
-    );
-  }
+  // No recording yet: show nothing rather than an inert "coming soon" chip.
+  if (!audioUrl) return null;
 
   const handleClick = () => {
     if (!audioRef.current) {
