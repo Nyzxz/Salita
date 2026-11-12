@@ -98,14 +98,14 @@ async function handleSavedQuizApi(req: VercelRequest, res: VercelResponse): Prom
     }
     if (req.method === 'DELETE') {
       const result = await deleteQuiz(idMatch[1]);
-      if (!result.ok) { sendError(res, result.status, result.error); return; }
+      if ('error' in result) { sendError(res, result.status, result.error); return; }
       res.status(200).json({ success: true, data: result.data });
       return;
     }
     const request = parseCreateQuizRequest(req.body);
     if (!request) { sendError(res, 400, 'Provide a title, description, and valid multiple-choice questions.'); return; }
     const result = await updateQuiz(idMatch[1], request);
-    if (!result.ok) { sendError(res, result.status, result.error); return; }
+    if ('error' in result) { sendError(res, result.status, result.error); return; }
     const body: ApiResponse<QuizContent> = { success: true, data: result.data };
     res.status(200).json(body);
     return;
@@ -127,7 +127,7 @@ async function handleSavedQuizApi(req: VercelRequest, res: VercelResponse): Prom
       return;
     }
     const started = await startQuiz(user, startMatch[1]);
-    if (!started.ok) {
+    if ('error' in started) {
       sendError(res, started.status, started.error);
       return;
     }
@@ -148,7 +148,7 @@ async function handleSavedQuizApi(req: VercelRequest, res: VercelResponse): Prom
       return;
     }
     const result = await grantRetakes(retakeMatch[1], studentIds);
-    if (!result.ok) {
+    if ('error' in result) {
       sendError(res, result.status, result.error);
       return;
     }
@@ -168,7 +168,7 @@ async function handleSavedQuizApi(req: VercelRequest, res: VercelResponse): Prom
       return;
     }
     const result = await submitQuizAttempt(user, submitMatch[1], request);
-    if (!result.ok) {
+    if ('error' in result) {
       sendError(res, result.status, result.error);
       return;
     }

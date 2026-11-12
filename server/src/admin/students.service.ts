@@ -322,9 +322,9 @@ export async function importStudents(rows: ImportStudentRow[]): Promise<ImportSt
     }
     const created = await addStudent(request);
     results.push(
-      created.ok
-        ? { username: request.username.toLowerCase(), status: 'created', password }
-        : { username: request.username, status: 'skipped', reason: created.error },
+      'error' in created
+        ? { username: request.username, status: 'skipped', reason: created.error }
+        : { username: request.username.toLowerCase(), status: 'created', password },
     );
   }
   return results;

@@ -54,7 +54,7 @@ export function parseCreateSubmissionRequest(body: unknown): CreateSubmissionReq
   if (attachmentId !== undefined && (typeof attachmentId !== 'string' || !mongoose.isValidObjectId(attachmentId))) return null;
   const trimmedContent = content.trim();
   if (taskId.length === 0 || trimmedContent.length === 0 || trimmedContent.length > LIMITS.submission) return null;
-  return { taskId, content: trimmedContent, ...(attachmentId ? { attachmentId } : {}) };
+  return { taskId, content: trimmedContent, ...(typeof attachmentId === 'string' ? { attachmentId } : {}) };
 }
 
 export async function submitWork(

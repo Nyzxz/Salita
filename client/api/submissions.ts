@@ -31,7 +31,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
   if (req.query.route === 'attachment' && req.method === 'GET') {
     const id = typeof req.query.id === 'string' ? req.query.id : '';
     const file = await readAttachment(user, id);
-    if (!file.ok) {
+    if ('error' in file) {
       fail(res, file.status, file.error);
       return;
     }
@@ -68,7 +68,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
       return;
     }
     const result = await uploadAttachment(user, upload);
-    if (!result.ok) {
+    if ('error' in result) {
       fail(res, result.status, result.error);
       return;
     }

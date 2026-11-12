@@ -38,7 +38,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
         return;
       }
       const result = await createSection(request);
-      if (!result.ok) {
+      if ('error' in result) {
         res.status(result.status).json({ success: false, data: null, error: result.error });
         return;
       }
@@ -47,7 +47,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
     }
     if (req.method === 'DELETE') {
       const result = await deleteSection(queryString(req.query, 'id', 40) ?? '');
-      if (!result.ok) {
+      if ('error' in result) {
         res.status(result.status).json({ success: false, data: null, error: result.error });
         return;
       }

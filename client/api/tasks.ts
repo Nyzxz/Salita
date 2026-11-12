@@ -51,14 +51,14 @@ async function handleContentApi(req: VercelRequest, res: VercelResponse): Promis
     if (req.query.content === 'lectures') {
       if (req.method === 'DELETE') {
         const result = await deleteLecture(id);
-        if (!result.ok) { sendError(res, result.status, result.error); return; }
+        if ('error' in result) { sendError(res, result.status, result.error); return; }
         res.status(200).json({ success: true, data: result.data });
         return;
       }
       const request = parseCreateLectureRequest(req.body);
       if (!request) { sendError(res, 400, 'Provide the word, translation, phonetic guide, category, and cultural note.'); return; }
       const result = await updateLecture(id, request);
-      if (!result.ok) { sendError(res, result.status, result.error); return; }
+      if ('error' in result) { sendError(res, result.status, result.error); return; }
       const body: ApiResponse<LectureRecord> = { success: true, data: result.data };
       res.status(200).json(body);
       return;
@@ -66,7 +66,7 @@ async function handleContentApi(req: VercelRequest, res: VercelResponse): Promis
     if (req.query.content === 'tasks') {
       if (req.method === 'DELETE') {
         const result = await deleteActivityTask(id);
-        if (!result.ok) { sendError(res, result.status, result.error); return; }
+        if ('error' in result) { sendError(res, result.status, result.error); return; }
         res.status(200).json({ success: true, data: result.data });
         return;
       }
@@ -74,7 +74,7 @@ async function handleContentApi(req: VercelRequest, res: VercelResponse): Promis
       if (!request) { sendError(res, 400, 'Provide a title, type, instructions, points, and valid due date.'); return; }
       const { type: _type, ...fields } = request;
       const result = await updateActivityTask(id, fields);
-      if (!result.ok) { sendError(res, result.status, result.error); return; }
+      if ('error' in result) { sendError(res, result.status, result.error); return; }
       const body: ApiResponse<ActivityTask> = { success: true, data: result.data };
       res.status(200).json(body);
       return;

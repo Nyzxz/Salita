@@ -14,6 +14,17 @@ export interface SubmissionDocument extends Document {
   attachment?: { id: Types.ObjectId; fileName: string; contentType: string; size: number } | null;
 }
 
+/** The file a student attached; the bytes live in the Attachment collection. */
+const attachmentSchema = new Schema(
+  {
+    id: { type: Schema.Types.ObjectId, ref: 'Attachment', required: true },
+    fileName: { type: String, required: true },
+    contentType: { type: String, required: true },
+    size: { type: Number, required: true },
+  },
+  { _id: false },
+);
+
 const submissionSchema = new Schema<SubmissionDocument>(
   {
     taskId: { type: String, required: true, trim: true },
@@ -26,16 +37,7 @@ const submissionSchema = new Schema<SubmissionDocument>(
     status: { type: String, enum: ['PENDING', 'GRADED'], default: 'PENDING', required: true },
     resubmittedAfterGrade: { type: Boolean, default: false },
     late: { type: Boolean, default: false },
-    attachment: {
-      type: {
-        _id: false,
-        id: { type: Schema.Types.ObjectId, ref: 'Attachment', required: true },
-        fileName: { type: String, required: true },
-        contentType: { type: String, required: true },
-        size: { type: Number, required: true },
-      },
-      default: undefined,
-    },
+    attachment: { type: attachmentSchema, default: undefined },
   },
   { timestamps: true },
 );

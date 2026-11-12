@@ -17,7 +17,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
   if (req.method === 'DELETE') {
     const studentId = typeof req.query.id === 'string' ? req.query.id : '';
     const removed = await removeStudent(studentId);
-    if (!removed.ok) {
+    if ('error' in removed) {
       res.status(removed.status).json({ success: false, data: null, error: removed.error });
       return;
     }

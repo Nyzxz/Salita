@@ -102,7 +102,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
       return;
     }
     const result = await updateProfile(user.id, patch);
-    if (!result.ok) {
+    if ('error' in result) {
       fail(res, result.status, result.error);
       return;
     }
@@ -118,7 +118,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
       return;
     }
     const result = await changePassword(user.id, request);
-    if (!result.ok) {
+    if ('error' in result) {
       fail(res, result.status, result.error);
       return;
     }
