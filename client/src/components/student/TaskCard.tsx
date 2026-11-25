@@ -6,6 +6,8 @@ import { downloadAttachment, uploadAttachment } from '../../api/tasks';
 import { saveBlob } from '../../api/client';
 import { LIMITS } from '../../lib/limits';
 import { Notice } from '../ui/Notice';
+import { AttachmentAudio } from '../common/AttachmentAudio';
+import { VoiceRecorder } from './VoiceRecorder';
 import { gradeLabel } from '../ui/GradeSelect';
 
 interface TaskCardProps {
@@ -59,7 +61,7 @@ export function TaskCard({ task, submission, onSubmit }: TaskCardProps) {
   const [error, setError] = useState<string | null>(null);
   const [file, setFile] = useState<File | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
-  const canAttach = task.type === 'PERFORMANCE_TASK';
+  const canAttach = true;
 
   const isOverdue = new Date(task.dueDate).getTime() < Date.now() && !submission;
   const isPastDue = new Date(task.dueDate).getTime() < Date.now();
@@ -128,6 +130,36 @@ export function TaskCard({ task, submission, onSubmit }: TaskCardProps) {
 
       <p className="text-sm leading-relaxed text-muted">{task.description}</p>
 
+      {task.rubric && task.rubric.length > 0 && (
+        <div className="rounded-xl border border-night-border p-4">
+          <p className="eyebrow">How this is graded</p>
+          <ul className="mt-2 flex flex-col gap-2 text-sm">
+            {task.rubric.map((criterion, index) => {
+              const score = submission?.status === 'GRADED' ? submission.rubricScores?.[index] : undefined;
+              return (
+                <li key={criterion.name + index} className="flex flex-col gap-0.5">
+                  <div className="flex items-baseline justify-between gap-3">
+                    <span className="text-parchment">{criterion.name}</span>
+                    <span className={score ? 'badge-leaf' : 'text-xs text-muted'}>
+                      {score ? `${score.points} / ${criterion.maxPoints}` : `up to ${criterion.maxPoints} pts`}
+                    </span>
+                  </div>
+                  {criterion.description && <span className="text-xs text-muted">{criterion.description}</span>}
+                  {score?.feedback && <span className="text-xs text-gold">Teacher: {score.feedback}</span>}
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      )}
+
+      {submission && (
+        <p className="rounded-xl border border-night-border bg-white/[0.02] px-3 py-2 text-xs text-muted">
+          Submitted {formatDateTime(submission.submittedAt)} · {submission.attachment ? '1 file attached' : 'no file'}
+          {submission.status === 'GRADED' ? ` · Graded ${submission.grade}/${task.totalPoints}` : ' · Waiting for your teacher to grade it'}
+        </p>
+      )}
+
       <div className="flex flex-col gap-2 border-t border-night-border pt-5">
         <label htmlFor={`submission-${task.id}`} className="field-label mb-0">
           {submission ? 'Your submission (resubmitting replaces it)' : 'Your response'}
@@ -146,7 +178,10 @@ export function TaskCard({ task, submission, onSubmit }: TaskCardProps) {
             This is past its due date. You can still submit, but your teacher will see it marked as late.
           </p>
         )}
-        {hasDraft && <p className="text-xs text-muted">Draft saved in this browser until you submit.</p>}
+        <p className="flex justify-between text-xs text-muted">
+          <span>{hasDraft ? 'Draft saved in this browser until you submit.' : ''}</span>
+          <span className={content.length > LIMITS.submission * 0.9 ? 'text-clay' : ''}>{content.length.toLocaleString()} / {LIMITS.submission.toLocaleString()}</span>
+        </p>
         {canAttach && (
           <div className="mt-1 flex flex-wrap items-center gap-2 text-sm">
             <input
@@ -174,7 +209,7 @@ export function TaskCard({ task, submission, onSubmit }: TaskCardProps) {
                 ? `${file.name} (${formatSize(file.size)})`
                 : submission?.attachment
                   ? `Attached: ${submission.attachment.fileName}`
-                  : 'Optional · PDF, PNG, JPG, DOCX or TXT, up to 1 MB'}
+                  : 'Optional · PDF, PNG, JPG, DOCX or TXT, up to 1 MB (or record your voice below)'}
             </span>
             {file && <button type="button" className="btn-ghost btn-sm" onClick={() => setFile(null)}>Remove</button>}
             {!file && submission?.attachment && (
@@ -188,6 +223,14 @@ export function TaskCard({ task, submission, onSubmit }: TaskCardProps) {
             )}
           </div>
         )}
+        <VoiceRecorder
+          disabled={isSaving}
+          onChange={(recorded) => {
+            setError(null);
+            setFile(recorded);
+          }}
+        />
+        {submission?.attachment?.contentType.startsWith('audio/') && !file && <AttachmentAudio id={submission.attachment.id} />}
         {error && <Notice tone="error">{error}</Notice>}
         <div className="mt-1">
           <button
@@ -200,6 +243,29 @@ export function TaskCard({ task, submission, onSubmit }: TaskCardProps) {
           </button>
         </div>
       </div>
+
+      {submission?.revisions && submission.revisions.length > 0 && (
+        <details className="rounded-xl border border-night-border p-4 text-sm">
+          <summary className="cursor-pointer text-muted hover:text-parchment">
+            Earlier versions ({submission.revisions.length}) — your past answers and your teacher’s comments
+          </summary>
+          <ol className="mt-3 flex flex-col gap-3">
+            {[...submission.revisions].reverse().map((revision) => (
+              <li key={revision.submittedAt} className="rounded-xl border border-night-border bg-white/[0.02] p-3">
+                <p className="text-xs text-muted">
+                  Submitted {formatDateTime(revision.submittedAt)}
+                  {revision.grade !== undefined ? ` · graded ${revision.grade}/${task.totalPoints}` : ''}
+                </p>
+                <p className="mt-2 whitespace-pre-wrap text-parchment/90">{revision.content}</p>
+                {revision.feedback && <p className="mt-2 text-xs text-gold">Teacher: {revision.feedback}</p>}
+                <button type="button" className="btn-ghost btn-sm mt-2" onClick={() => handleChange(revision.content)}>
+                  Start my revision from this version
+                </button>
+              </li>
+            ))}
+          </ol>
+        </details>
+      )}
 
       {submission?.feedback && (
         <div className="rounded-xl border border-gold/20 bg-gold/5 p-4 text-sm">

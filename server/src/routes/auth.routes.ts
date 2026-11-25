@@ -1,5 +1,6 @@
 import { Router } from 'express';
-import type { ApiResponse, AuthSession, NotificationFeed, User } from '../../../shared/src/types.js';
+import { parseAvatarUpload, readAvatar, removeAvatar, saveAvatar } from '../auth/avatar.service.js';
+import type { Achievements, ApiResponse, AuthSession, NotificationFeed, User } from '../../../shared/src/types.js';
 import {
   changePassword,
   login,
@@ -10,7 +11,8 @@ import {
 } from '../auth/auth.service.js';
 import { clearSessionCookie } from '../auth/cookies.js';
 import { toCookieSession } from '../auth/sessionResponse.js';
-import { listNotifications, markNotificationsRead, parseMarkReadRequest, streamNotificationEvents } from '../notifications/notifications.service.js';
+import { ensureDueSoonReminders, listNotifications, markNotificationsRead, parseMarkReadRequest, streamNotificationEvents } from '../notifications/notifications.service.js';
+import { getAchievements } from '../achievements/achievements.service.js';
 import { clientIpFrom } from '../auth/ipThrottle.js';
 import { loginOutcomeToHttp } from '../auth/loginOutcome.js';
 import { ApiError } from '../middleware/errorHandler.js';
@@ -39,6 +41,18 @@ authRouter.post('/login', async (req, res, next) => {
 authRouter.get('/me', requireAuthAllowingPasswordChange(), async (req, res, next) => {
   try {
     res.setHeader('Cache-Control', 'no-store');
+    if (req.query.action === 'avatar') {
+      const viewer = res.locals.user as User;
+      const id = typeof req.query.id === 'string' ? req.query.id : viewer.id;
+      const image = await readAvatar(viewer, id);
+      if (!image.ok) throw new ApiError(image.status, image.error);
+      res.setHeader('Content-Type', image.data.contentType);
+      res.setHeader('X-Content-Type-Options', 'nosniff');
+      res.setHeader('Content-Security-Policy', "sandbox; default-src 'none'");
+      res.setHeader('Cache-Control', 'private, max-age=86400');
+      res.send(image.data.data);
+      return;
+    }
     if (req.query.action === 'events') {
       res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
       res.setHeader('Cache-Control', 'no-cache, no-transform');
@@ -58,8 +72,15 @@ authRouter.get('/me', requireAuthAllowingPasswordChange(), async (req, res, next
       res.end();
       return;
     }
+    if (req.query.action === 'achievements') {
+      const body: ApiResponse<Achievements> = { success: true, data: await getAchievements(res.locals.user as User) };
+      res.json(body);
+      return;
+    }
     if (req.query.action === 'notifications') {
-      const body: ApiResponse<NotificationFeed> = { success: true, data: await listNotifications((res.locals.user as User).id) };
+      const viewer = res.locals.user as User;
+      if (viewer.role === 'STUDENT') await ensureDueSoonReminders(viewer);
+      const body: ApiResponse<NotificationFeed> = { success: true, data: await listNotifications(viewer.id) };
       res.json(body);
       return;
     }
@@ -78,6 +99,29 @@ authRouter.post('/me', (req, res, next) => {
   }
   res.setHeader('Set-Cookie', clearSessionCookie());
   res.json({ success: true, data: null });
+});
+
+/** POST/DELETE /api/auth/me?action=avatar — set or remove your profile picture. */
+authRouter.all('/me', requireAuthAllowingPasswordChange(), async (req, res, next) => {
+  if (req.query.action !== 'avatar' || (req.method !== 'POST' && req.method !== 'DELETE')) {
+    next();
+    return;
+  }
+  try {
+    const user = res.locals.user as User;
+    if (req.method === 'POST') {
+      const upload = parseAvatarUpload(req.body);
+      if ('error' in upload) throw new ApiError(400, upload.error);
+      await saveAvatar(user.id, upload);
+    } else {
+      await removeAvatar(user.id);
+    }
+    const fresh = await updateProfile(user.id, {});
+    if (!fresh.ok) throw new ApiError(fresh.status, fresh.error);
+    res.json({ success: true, data: fresh.data });
+  } catch (err) {
+    next(err);
+  }
 });
 
 /** POST /api/auth/logout — clears the session cookie. */

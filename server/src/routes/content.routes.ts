@@ -1,6 +1,8 @@
 import { Router } from 'express';
-import type { ApiResponse, ActivityTask, LectureRecord, User } from '../../../shared/src/types.js';
+import type { ApiResponse, ActivityTask, BulkContentResult, LectureRecord, User } from '../../../shared/src/types.js';
 import {
+  bulkContent,
+  parseBulkContentRequest,
   createActivityTask,
   createLecture,
   deleteActivityTask,
@@ -44,6 +46,17 @@ contentRouter.post('/tasks', requireAuth('TEACHER'), async (req, res, next) => {
     const user = res.locals.user as User;
     const body: ApiResponse<ActivityTask> = { success: true, data: await createActivityTask(user, request) };
     res.status(201).json(body);
+  } catch (error) {
+    next(error);
+  }
+});
+
+contentRouter.post('/bulk', requireAuth('TEACHER'), async (req, res, next) => {
+  try {
+    const request = parseBulkContentRequest(req.body);
+    if (!request) throw new ApiError(400, 'Choose up to 100 items and an action (and a date when scheduling).');
+    const body: ApiResponse<BulkContentResult> = { success: true, data: await bulkContent(request) };
+    res.json(body);
   } catch (error) {
     next(error);
   }

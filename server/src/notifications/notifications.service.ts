@@ -1,7 +1,13 @@
 import mongoose from 'mongoose';
 import type { NotificationFeed } from '../../../shared/src/types.js';
 import { connectDB } from '../config/db.js';
+import { matchesGrade } from '../grades.js';
+import { liveFilter } from '../publishing.js';
+import { LearningContent } from '../models/LearningContent.js';
 import { Notification } from '../models/Notification.js';
+import { Quiz } from '../models/Quiz.js';
+import { QuizAttempt } from '../models/QuizAttempt.js';
+import { Submission } from '../models/Submission.js';
 import { User as UserModel } from '../models/User.js';
 
 export interface NewNotification {
@@ -50,6 +56,55 @@ export async function notifyTeachers(notification: NewNotification): Promise<voi
     await connectDB();
     const teachers = await UserModel.find({ role: 'TEACHER' as const, status: 'ACTIVE' as const }).select('_id').lean();
     await notifyUsers(teachers.map((teacher) => String(teacher._id)), notification);
+  });
+}
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Adds a reminder for each quiz or task the student has not done that closes within the next
+ * day. Each reminder is created once (it carries a key), so opening the bell again adds nothing.
+ */
+export async function ensureDueSoonReminders(student: { id: string; section?: string }): Promise<void> {
+  await safely(async () => {
+    await connectDB();
+    const now = new Date();
+    const horizon = new Date(now.getTime() + DAY_MS);
+    const window = { $gt: now, $lte: horizon };
+    const [quizzes, tasks, attempted, submitted] = await Promise.all([
+      Quiz.find({ dueDate: window, ...liveFilter() }).select('title dueDate gradeLevel').lean(),
+      LearningContent.find({ type: { $in: ['ACTIVITY', 'PERFORMANCE_TASK'] }, dueDate: window, ...liveFilter() }).select('title dueDate gradeLevel type').lean(),
+      QuizAttempt.distinct('quizId', { studentId: student.id }),
+      Submission.distinct('taskId', { studentId: student.id }),
+    ]);
+    const done = new Set([...attempted.map(String), ...submitted.map(String)]);
+    const reminders: { key: string; title: string; body: string; link: string }[] = [];
+    for (const quiz of quizzes) {
+      if (done.has(String(quiz._id)) || !matchesGrade(quiz.gradeLevel, student.section)) continue;
+      reminders.push({ key: `due:quiz:${String(quiz._id)}`, title: 'Quiz closes soon', body: `“${quiz.title}” closes within 24 hours.`, link: '/dashboard/student#quizzes' });
+    }
+    for (const task of tasks) {
+      if (done.has(String(task._id)) || !matchesGrade(task.gradeLevel, student.section)) continue;
+      const isActivity = task.type === 'ACTIVITY';
+      reminders.push({
+        key: `due:task:${String(task._id)}`,
+        title: isActivity ? 'Activity due soon' : 'Performance task due soon',
+        body: `“${task.title ?? 'Untitled'}” is due within 24 hours.`,
+        link: isActivity ? '/dashboard/student#activities' : '/dashboard/student#performance',
+      });
+    }
+    await Promise.all(
+      reminders.map((reminder) =>
+        Notification.updateOne(
+          { userId: student.id, dedupeKey: reminder.key },
+          { $setOnInsert: { title: reminder.title, body: reminder.body, link: reminder.link, createdAt: new Date() } },
+          { upsert: true },
+        ).catch((error: unknown) => {
+          // Two requests racing to create the same reminder: the loser is simply ignored.
+          if (!(typeof error === 'object' && error !== null && 'code' in error && error.code === 11000)) throw error;
+        }),
+      ),
+    );
   });
 }
 

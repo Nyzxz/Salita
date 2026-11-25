@@ -1,8 +1,9 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import type { ApiResponse, QuizAttemptRecord, QuizContent, QuizQuestion, QuizStartRecord, TeacherAnalytics, User } from '../../shared/src/types.js';
+import type { ApiResponse, QuestionBankItemRecord, QuestionBankList, QuizAttemptRecord, QuizContent, QuizQuestion, QuizStartRecord, TeacherAnalytics, User } from '../../shared/src/types.js';
 import { QUIZ_QUESTIONS } from '../../server/src/data/quiz.data.js';
 import { parsePageRequest, queryString } from '../../server/src/pagination.js';
 import { getUserFromRequest } from '../../server/src/auth/auth.service.js';
+import { deleteBankQuestion, listBankQuestions, parseSaveBankQuestionRequest, saveBankQuestion } from '../../server/src/quizzes/bank.service.js';
 import {
   createQuiz,
   deleteQuiz,
@@ -44,6 +45,42 @@ async function handleSavedQuizApi(req: VercelRequest, res: VercelResponse): Prom
   }
 
   const path = queryPath(req.query.path).replace(/^\/+|\/+$/g, '');
+  // Question bank (teachers): GET /api/quizzes/bank, POST /api/quizzes/bank, DELETE /api/quizzes/bank/:id.
+  if (path === 'bank' || path.startsWith('bank/')) {
+    if (user.role !== 'TEACHER') {
+      sendError(res, 403, 'Your account is not allowed to do that.');
+      return;
+    }
+    if (path === 'bank' && req.method === 'GET') {
+      const body: ApiResponse<QuestionBankList> = {
+        success: true,
+        data: await listBankQuestions({ topic: queryString(req.query, 'topic'), difficulty: queryString(req.query, 'difficulty') }),
+      };
+      res.status(200).json(body);
+      return;
+    }
+    if (path === 'bank' && req.method === 'POST') {
+      const request = parseSaveBankQuestionRequest(req.body);
+      if (!request) {
+        sendError(res, 400, 'Give the question, four options, the correct one, points, a topic and a difficulty.');
+        return;
+      }
+      const body: ApiResponse<QuestionBankItemRecord> = { success: true, data: await saveBankQuestion(user.id, request) };
+      res.status(201).json(body);
+      return;
+    }
+    if (path.startsWith('bank/') && req.method === 'DELETE') {
+      if (!(await deleteBankQuestion(path.slice(5)))) {
+        sendError(res, 404, 'That question is no longer in the bank.');
+        return;
+      }
+      res.status(200).json({ success: true, data: { id: path.slice(5) } });
+      return;
+    }
+    sendError(res, 405, `Method ${req.method} not allowed.`);
+    return;
+  }
+
   if (!path && req.method === 'GET') {
     const body: ApiResponse<QuizContent[]> = { success: true, data: await listQuizzes(user as User) };
     res.status(200).json(body);

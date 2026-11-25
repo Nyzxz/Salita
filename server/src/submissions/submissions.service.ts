@@ -2,6 +2,7 @@ import type {
   AttachmentInfo,
   CreateSubmissionRequest,
   GradeSubmissionRequest,
+  RubricScore,
   SubmissionRecord,
   UploadAttachmentRequest,
   User,
@@ -15,6 +16,7 @@ import { Attachment } from '../models/Attachment.js';
 import { LearningContent } from '../models/LearningContent.js';
 import { Submission, type SubmissionDocument } from '../models/Submission.js';
 import { TASKS } from '../data/tasks.data.js';
+import { liveFilter } from '../publishing.js';
 import { notifyTeachers, notifyUsers } from '../notifications/notifications.service.js';
 import { checkAttachment, safeFileName } from './attachments.js';
 
@@ -33,6 +35,20 @@ function toSubmissionRecord(record: SubmissionDocument): SubmissionRecord {
     status: record.status,
     ...(record.resubmittedAfterGrade ? { resubmitted: true } : {}),
     ...(record.late ? { late: true } : {}),
+    ...(record.rubricScores && record.rubricScores.length
+      ? { rubricScores: record.rubricScores.map((s) => ({ points: s.points, ...(s.feedback ? { feedback: s.feedback } : {}) })) }
+      : {}),
+    ...(record.revisions && record.revisions.length
+      ? {
+          revisions: record.revisions.map((r) => ({
+            content: r.content,
+            submittedAt: r.submittedAt.toISOString(),
+            ...(r.grade !== undefined && r.grade !== null ? { grade: r.grade } : {}),
+            ...(r.feedback ? { feedback: r.feedback } : {}),
+            ...(r.rubricScores && r.rubricScores.length ? { rubricScores: r.rubricScores.map((s) => ({ points: s.points, ...(s.feedback ? { feedback: s.feedback } : {}) })) } : {}),
+          })),
+        }
+      : {}),
     ...(record.attachment
       ? {
           attachment: {
@@ -75,6 +91,9 @@ export async function submitWork(
   }
 
   await connectDB();
+  if (mongoose.isValidObjectId(request.taskId) && !(await LearningContent.exists({ _id: request.taskId, ...liveFilter() }))) {
+    return { ok: false, status: 404, error: `No activity or task found with id "${request.taskId}".` };
+  }
 
   let attachment: AttachmentInfo | undefined;
   if (request.attachmentId) {
@@ -87,6 +106,17 @@ export async function submitWork(
   // Resubmitting graded work clears the grade; flag it so the teacher notices it needs re-grading.
   const resubmittedAfterGrade = previous ? previous.status === 'GRADED' || previous.resubmittedAfterGrade === true : false;
   const late = new Date(task.dueDate).getTime() < Date.now();
+
+  // Keep what the student is replacing (and how the teacher responded) so both can look back at it.
+  const revision = previous
+    ? {
+        content: previous.submittedContent,
+        submittedAt: previous.submittedAt,
+        ...(previous.grade !== undefined && previous.grade !== null ? { grade: previous.grade } : {}),
+        ...(previous.feedback ? { feedback: previous.feedback } : {}),
+        ...(previous.rubricScores && previous.rubricScores.length ? { rubricScores: previous.rubricScores.map((s) => ({ points: s.points, ...(s.feedback ? { feedback: s.feedback } : {}) })) } : {}),
+      }
+    : null;
 
   const upsert = () =>
     Submission.findOneAndUpdate(
@@ -101,7 +131,8 @@ export async function submitWork(
           late,
           ...(attachment ? { attachment: { ...attachment, id: new mongoose.Types.ObjectId(attachment.id) } } : {}),
         },
-        $unset: { grade: 1, feedback: 1 },
+        $unset: { grade: 1, feedback: 1, rubricScores: 1 },
+        ...(revision ? { $push: { revisions: { $each: [revision], $slice: -10 } } } : {}),
         $setOnInsert: { taskId: request.taskId, studentId: user.id },
       },
       { new: true, upsert: true, runValidators: true, setDefaultsOnInsert: true },
@@ -222,13 +253,27 @@ export async function getAllSubmissions(filters: SubmissionFilters = {}): Promis
 
 export function parseGradeSubmissionRequest(body: unknown): GradeSubmissionRequest | null {
   if (typeof body !== 'object' || body === null) return null;
-  const { grade, feedback, expectedSubmittedAt } = body as Record<string, unknown>;
-  if (typeof grade !== 'number' || !Number.isFinite(grade)) return null;
+  const { grade, feedback, expectedSubmittedAt, rubricScores } = body as Record<string, unknown>;
+  let scores: RubricScore[] | undefined;
+  if (rubricScores !== undefined) {
+    if (!Array.isArray(rubricScores) || rubricScores.length === 0 || rubricScores.length > 8) return null;
+    scores = [];
+    for (const raw of rubricScores) {
+      if (typeof raw !== 'object' || raw === null) return null;
+      const { points, feedback: note } = raw as Record<string, unknown>;
+      if (typeof points !== 'number' || !Number.isFinite(points) || points < 0) return null;
+      if (note !== undefined && (typeof note !== 'string' || note.length > 500)) return null;
+      scores.push({ points, ...(typeof note === 'string' && note.trim() ? { feedback: note.trim() } : {}) });
+    }
+  }
+  // With a rubric the total comes from the criteria; the server recomputes it when grading.
+  if (!scores && (typeof grade !== 'number' || !Number.isFinite(grade))) return null;
   if (expectedSubmittedAt !== undefined && (typeof expectedSubmittedAt !== 'string' || !Number.isFinite(Date.parse(expectedSubmittedAt)))) return null;
   const trimmedFeedback = typeof feedback === 'string' ? feedback.trim() : undefined;
   if (trimmedFeedback !== undefined && trimmedFeedback.length > LIMITS.feedback) return null;
   return {
-    grade,
+    grade: typeof grade === 'number' && Number.isFinite(grade) ? grade : 0,
+    ...(scores ? { rubricScores: scores } : {}),
     feedback: trimmedFeedback && trimmedFeedback.length > 0 ? trimmedFeedback : undefined,
     ...(typeof expectedSubmittedAt === 'string' ? { expectedSubmittedAt } : {}),
   };
@@ -257,7 +302,22 @@ export async function gradeSubmission(
     return { ok: false, status: 404, error: 'No task matches this submission.' };
   }
 
-  if (request.grade < 0 || request.grade > task.totalPoints) {
+  let grade = request.grade;
+  if (request.rubricScores) {
+    const rubric = task.rubric;
+    if (!rubric || rubric.length !== request.rubricScores.length) {
+      return { ok: false, status: 400, error: 'The marks do not match this task’s rubric.' };
+    }
+    const over = request.rubricScores.findIndex((score, index) => score.points > rubric[index].maxPoints);
+    if (over >= 0) {
+      return { ok: false, status: 400, error: `“${rubric[over].name}” is worth at most ${rubric[over].maxPoints} points.` };
+    }
+    grade = request.rubricScores.reduce((sum, score) => sum + score.points, 0);
+  } else if (task.rubric && task.rubric.length > 0) {
+    return { ok: false, status: 400, error: 'Score each rubric criterion for this task.' };
+  }
+
+  if (grade < 0 || grade > task.totalPoints) {
     return {
       ok: false,
       status: 400,
@@ -270,11 +330,21 @@ export async function gradeSubmission(
   const filter: Record<string, unknown> = { _id: submission._id };
   filter.submittedAt = request.expectedSubmittedAt ? new Date(request.expectedSubmittedAt) : submission.submittedAt;
   const feedback = request.feedback?.trim();
+  const unsetFields: Record<string, 1> = {
+    ...(feedback ? {} : { feedback: 1 }),
+    ...(request.rubricScores ? {} : { rubricScores: 1 }),
+  };
   const updated = await Submission.findOneAndUpdate(
     filter,
     {
-      $set: { grade: request.grade, status: 'GRADED', resubmittedAfterGrade: false, ...(feedback ? { feedback } : {}) },
-      ...(feedback ? {} : { $unset: { feedback: 1 } }),
+      $set: {
+        grade,
+        status: 'GRADED',
+        resubmittedAfterGrade: false,
+        ...(feedback ? { feedback } : {}),
+        ...(request.rubricScores ? { rubricScores: request.rubricScores } : {}),
+      },
+      ...(Object.keys(unsetFields).length ? { $unset: unsetFields } : {}),
     },
     { new: true, runValidators: true },
   );
@@ -288,7 +358,7 @@ export async function gradeSubmission(
 
   await notifyUsers([String(updated.studentId)], {
     title: 'Your work was graded',
-    body: `“${task.title}”: ${request.grade} / ${task.totalPoints}${feedback ? ' — feedback left' : ''}.`,
+    body: `“${task.title}”: ${grade} / ${task.totalPoints}${feedback ? ' — feedback left' : ''}.`,
     link: '/dashboard/student#grades',
   });
   return { ok: true, data: toSubmissionRecord(updated) };

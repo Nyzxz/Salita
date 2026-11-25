@@ -39,6 +39,11 @@ export function QuizReview({ attempt }: { attempt: QuizAttemptRecord }) {
                   );
                 })}
               </ul>
+              {item.explanation && (
+                <p className="mt-3 rounded-xl border border-gold/20 bg-gold/5 px-3 py-2 text-sm leading-relaxed text-parchment/90">
+                  <span className="eyebrow mr-2">Why</span>{item.explanation}
+                </p>
+              )}
               {item.userAnswer < 0 && <p className="mt-2 text-xs text-clay">You left this blank.</p>}
             </li>
           );

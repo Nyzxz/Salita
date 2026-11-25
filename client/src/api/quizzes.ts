@@ -1,5 +1,8 @@
 import type {
   CreateQuizRequest,
+  QuestionBankItemRecord,
+  QuestionBankList,
+  SaveBankQuestionRequest,
   PageMeta,
   QuizAttemptRecord,
   QuizContent,
@@ -60,4 +63,19 @@ export async function fetchQuizResults(
 
 export function fetchTeacherAnalytics(): Promise<TeacherAnalytics> {
   return apiGet<TeacherAnalytics>('/api/quizzes/analytics');
+}
+
+export function fetchQuestionBank(filters: { topic?: string; difficulty?: string } = {}): Promise<QuestionBankList> {
+  const params: Record<string, string> = {};
+  if (filters.topic) params.topic = filters.topic;
+  if (filters.difficulty) params.difficulty = filters.difficulty;
+  return apiGet<QuestionBankList>('/api/quizzes/bank', params);
+}
+
+export function saveBankQuestion(request: SaveBankQuestionRequest): Promise<QuestionBankItemRecord> {
+  return apiPost<QuestionBankItemRecord>('/api/quizzes/bank', request);
+}
+
+export function removeBankQuestion(id: string): Promise<{ id: string }> {
+  return apiDelete<{ id: string }>(`/api/quizzes/bank/${id}`);
 }

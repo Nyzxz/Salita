@@ -1,4 +1,7 @@
+import { useEffect, useState } from 'react';
 import { useAuth } from '../auth/AuthContext';
+import { fetchSubmissionPage } from '../api/tasks';
+import { onLive } from '../lib/live';
 import { DashboardShell } from '../components/layout/DashboardShell';
 import { ModuleGrid } from '../components/layout/ModuleGrid';
 import { BookIcon, ChartIcon, ClipboardCheckIcon, UsersIcon } from '../components/common/icons';
@@ -22,6 +25,22 @@ export function greetingName(fullName: string | undefined): string {
 export function TeacherDashboard() {
   const { session } = useAuth();
   const callName = greetingName(session?.user.name);
+  const [ungraded, setUngraded] = useState(0);
+
+  useEffect(() => {
+    let active = true;
+    const load = () => {
+      fetchSubmissionPage({ status: 'PENDING', limit: 1 })
+        .then((page) => active && setUngraded(page.meta.total))
+        .catch(() => undefined);
+    };
+    load();
+    const stop = onLive(load);
+    return () => {
+      active = false;
+      stop();
+    };
+  }, []);
 
   return (
     <DashboardShell
@@ -47,6 +66,8 @@ export function TeacherDashboard() {
             description: 'Review student submissions, enter scores, and leave feedback.',
             href: '/dashboard/admin/grading',
             icon: ClipboardCheckIcon,
+            badge: ungraded,
+            badgeLabel: 'to grade',
           },
           {
             title: 'Class analytics',

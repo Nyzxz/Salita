@@ -2,6 +2,7 @@ import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { AutoTextarea } from '../components/ui/AutoTextarea';
 import { formatDateTime } from '../lib/dates';
 import type { ActivityTask, QuizAttemptRecord, SubmissionRecord, TaskType } from '@shared/types';
+import { AttachmentAudio } from '../components/common/AttachmentAudio';
 import { ErrorState } from '../components/common/ErrorState';
 import { LoadingState } from '../components/common/LoadingState';
 import { DashboardShell } from '../components/layout/DashboardShell';
@@ -20,10 +21,16 @@ import { onLive, throttledWhenLive } from '../lib/live';
 
 type GradingTab = 'activities' | 'performance' | 'quizzes';
 
+interface RubricDraft {
+  points: string;
+  feedback: string;
+}
+
 interface DraftState {
   [submissionId: string]: {
     grade: string;
     feedback: string;
+    rubric?: RubricDraft[];
   };
 }
 
@@ -49,6 +56,8 @@ export function TeacherGradingPage() {
   const [performance, setPerformance] = useState<Listing<SubmissionRecord>>({ ...EMPTY_LISTING, items: [] });
   const [quizAttempts, setQuizAttempts] = useState<Listing<QuizAttemptRecord>>({ ...EMPTY_LISTING, items: [] });
   const [pending, setPending] = useState({ activities: 0, performance: 0 });
+  const [onlyAwaiting, setOnlyAwaiting] = useState(false);
+  const onlyAwaitingRef = useRef(false);
   const [drafts, setDrafts] = useState<DraftState>({});
   const [error, setError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -109,7 +118,7 @@ export function TeacherGradingPage() {
           if (!active) return;
           setQuizAttempts((current) => ({ items: mergeFirstPage(page.items, current.items), total: page.meta.total, page: current.page }));
         } else {
-          const page = await fetchSubmissionPage({ taskType: TAB_TASK_TYPE[tab], limit: 50 });
+          const page = await fetchSubmissionPage({ taskType: TAB_TASK_TYPE[tab], limit: 50, ...(onlyAwaitingRef.current ? { status: 'PENDING' as const } : {}) });
           if (!active) return;
           const setter = tab === 'activities' ? setActivities : setPerformance;
           setter((current) => ({ items: mergeFirstPage(page.items, current.items), total: page.meta.total, page: current.page }));
@@ -201,7 +210,7 @@ export function TeacherGradingPage() {
         }));
       } else {
         const listing = activeTab === 'activities' ? activities : performance;
-        const page = await fetchSubmissionPage({ taskType: TAB_TASK_TYPE[activeTab], page: listing.page + 1, limit: 50 });
+        const page = await fetchSubmissionPage({ taskType: TAB_TASK_TYPE[activeTab], page: listing.page + 1, limit: 50, ...(onlyAwaitingRef.current ? { status: 'PENDING' as const } : {}) });
         const setter = activeTab === 'activities' ? setActivities : setPerformance;
         setter((current) => ({
           items: [...current.items, ...page.items.filter((item) => !current.items.some((existing) => existing.id === item.id))],
@@ -217,28 +226,61 @@ export function TeacherGradingPage() {
     }
   };
 
-  const handleDraftChange = (submissionId: string, field: 'grade' | 'feedback', value: string) => {
-    setDrafts((current) => ({
-      ...current,
-      [submissionId]: {
-        grade: current[submissionId]?.grade ?? '',
-        feedback: current[submissionId]?.feedback ?? '',
-        [field]: value,
-      },
-    }));
+  const toggleAwaiting = () => {
+    const next = !onlyAwaitingRef.current;
+    onlyAwaitingRef.current = next;
+    setOnlyAwaiting(next);
+    // Start the list over so graded items from the unfiltered view don't linger.
+    setActivities({ ...EMPTY_LISTING, items: [] });
+    setPerformance({ ...EMPTY_LISTING, items: [] });
+    void refreshRef.current(false);
   };
 
-  const handleSave = async (submission: SubmissionRecord) => {
+  /** The draft for a submission, with rubric rows filled in from the task and any saved marks. */
+  const draftFor = (submission: SubmissionRecord) => {
+    const existing = drafts[submission.id];
+    const task = taskLookup.get(submission.taskId);
+    const rubric =
+      existing?.rubric ??
+      task?.rubric?.map((_criterion, index) => ({
+        points: submission.rubricScores?.[index]?.points?.toString() ?? '',
+        feedback: submission.rubricScores?.[index]?.feedback ?? '',
+      }));
+    return {
+      grade: existing?.grade ?? submission.grade?.toString() ?? '',
+      feedback: existing?.feedback ?? submission.feedback ?? '',
+      ...(rubric ? { rubric } : {}),
+    };
+  };
+
+  const handleDraftChange = (submission: SubmissionRecord, field: 'grade' | 'feedback', value: string) => {
+    const base = draftFor(submission);
+    setDrafts((current) => ({ ...current, [submission.id]: { ...base, [field]: value } }));
+  };
+
+  const handleRubricChange = (submission: SubmissionRecord, index: number, field: keyof RubricDraft, value: string) => {
+    const base = draftFor(submission);
+    const rubric = (base.rubric ?? []).map((row, rowIndex) => (rowIndex === index ? { ...row, [field]: value } : row));
+    const total = rubric.reduce((sum, row) => sum + (Number(row.points) || 0), 0);
+    setDrafts((current) => ({ ...current, [submission.id]: { ...base, rubric, grade: String(total) } }));
+  };
+
+  const handleSave = async (submission: SubmissionRecord, goNext = false) => {
     if (!session) return;
 
     const task = taskLookup.get(submission.taskId);
-    const draft = drafts[submission.id] ?? {
-      grade: submission.grade?.toString() ?? '',
-      feedback: submission.feedback ?? '',
-    };
+    const draft = draftFor(submission);
+    const criteria = task?.rubric;
+    if (criteria && draft.rubric) {
+      const problem = draft.rubric.findIndex((row, index) => row.points.trim() === '' || !Number.isFinite(Number(row.points)) || Number(row.points) < 0 || Number(row.points) > criteria[index].maxPoints);
+      if (problem >= 0) {
+        setActionError(`Enter 0–${criteria[problem].maxPoints} points for “${criteria[problem].name}”.`);
+        return;
+      }
+    }
 
     const nextGrade = Number(draft.grade);
-    if (draft.grade.trim() === '' || !Number.isFinite(nextGrade) || nextGrade < 0 || (task && nextGrade > task.totalPoints)) {
+    if (!criteria && (draft.grade.trim() === '' || !Number.isFinite(nextGrade) || nextGrade < 0 || (task && nextGrade > task.totalPoints))) {
       setActionError(task ? `Grade must be between 0 and ${task.totalPoints}.` : 'Enter a valid grade.');
       return;
     }
@@ -249,6 +291,9 @@ export function TeacherGradingPage() {
     try {
       const updated = await gradeSubmission(submission.id, {
         grade: nextGrade,
+        ...(criteria && draft.rubric
+          ? { rubricScores: draft.rubric.map((row) => ({ points: Number(row.points), ...(row.feedback.trim() ? { feedback: row.feedback.trim() } : {}) })) }
+          : {}),
         feedback: draft.feedback.trim() || undefined,
         // Lets the server refuse the save if the student resubmitted while this was open.
         expectedSubmittedAt: submission.submittedAt,
@@ -266,6 +311,7 @@ export function TeacherGradingPage() {
         [submission.id]: { grade: updated.grade?.toString() ?? '', feedback: updated.feedback ?? '' },
       }));
       void refreshRef.current(true);
+      if (goNext) openNextAwaiting(submission.id);
     } catch (err) {
       setActionError(err instanceof Error ? err.message : 'Could not save the grade.');
       // A conflict means the work changed: reload so the new version (and a fresh draft) is shown.
@@ -273,6 +319,22 @@ export function TeacherGradingPage() {
     } finally {
       setSavingId(null);
     }
+  };
+
+  /** Opens the next submission that still needs a grade, so a stack can be marked without hunting. */
+  const openNextAwaiting = (currentId: string) => {
+    const list = activeTab === 'activities' ? activities.items : performance.items;
+    const start = list.findIndex((item) => item.id === currentId);
+    const ordered = [...list.slice(start + 1), ...list.slice(0, Math.max(start, 0))];
+    const next = ordered.find((item) => item.id !== currentId && item.status === 'PENDING');
+    if (!next) {
+      setExpandedSubmissionId(null);
+      setActionError(null);
+      setRetakeNotice('That was the last one waiting for a grade.');
+      return;
+    }
+    setExpandedSubmissionId(next.id);
+    window.setTimeout(() => document.getElementById(`submission-${next.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 50);
   };
 
   const handleDownload = async (submission: SubmissionRecord) => {
@@ -330,6 +392,14 @@ export function TeacherGradingPage() {
       <div key={activeTab} className="animate-fade-in-up">
         {activeTab !== 'quizzes' && (
           <>
+      <div className="mb-4 flex flex-wrap items-center gap-2" role="group" aria-label="Filter submissions">
+        <button type="button" aria-pressed={!onlyAwaiting} onClick={() => onlyAwaiting && toggleAwaiting()} className={`rounded-full border px-3.5 py-1.5 text-sm transition ${!onlyAwaiting ? 'border-gold bg-gold/15 text-parchment' : 'border-night-border text-muted hover:text-parchment'}`}>
+          All submissions
+        </button>
+        <button type="button" aria-pressed={onlyAwaiting} onClick={() => !onlyAwaiting && toggleAwaiting()} className={`rounded-full border px-3.5 py-1.5 text-sm transition ${onlyAwaiting ? 'border-gold bg-gold/15 text-parchment' : 'border-night-border text-muted hover:text-parchment'}`}>
+          Submitted, awaiting grade <span className="text-xs opacity-70">{activeTab === 'activities' ? pending.activities : pending.performance}</span>
+        </button>
+      </div>
       {isLoading ? (
         <LoadingState label="Loading submissions…" />
       ) : error ? (
@@ -353,15 +423,13 @@ export function TeacherGradingPage() {
               <tbody>
                 {visibleSubmissions.map((submission) => {
                   const task = taskLookup.get(submission.taskId);
-                  const draft = drafts[submission.id] ?? {
-                    grade: submission.grade?.toString() ?? '',
-                    feedback: submission.feedback ?? '',
-                  };
+                  const draft = draftFor(submission);
+                  const hasRubric = (task?.rubric?.length ?? 0) > 0;
                   const isExpanded = expandedSubmissionId === submission.id;
 
                   return (
                     <Fragment key={submission.id}>
-                      <tr>
+                      <tr id={`submission-${submission.id}`}>
                         <td>
                           <div className="flex items-center gap-3">
                             <Avatar name={submission.studentName} size="sm" accent="leaf" />
@@ -402,7 +470,9 @@ export function TeacherGradingPage() {
                             max={task?.totalPoints ?? 100}
                             value={draft.grade}
                             aria-label={`Grade for ${submission.studentName}`}
-                            onChange={(event) => handleDraftChange(submission.id, 'grade', event.target.value)}
+                            readOnly={hasRubric}
+                            title={hasRubric ? 'Total of the rubric marks (open the row to score each criterion)' : undefined}
+                            onChange={(event) => handleDraftChange(submission, 'grade', event.target.value)}
                             className="field w-20 py-2"
                           />
                           {task && <span className="ml-2 text-xs text-muted">/ {task.totalPoints}</span>}
@@ -411,7 +481,7 @@ export function TeacherGradingPage() {
                           <AutoTextarea
                             value={draft.feedback}
                             onChange={(event) =>
-                              handleDraftChange(submission.id, 'feedback', event.target.value)
+                              handleDraftChange(submission, 'feedback', event.target.value)
                             }
                             rows={2}
                             maxLength={LIMITS.feedback}
@@ -429,6 +499,15 @@ export function TeacherGradingPage() {
                           >
                             {savingId === submission.id ? 'Saving…' : 'Save'}
                           </button>
+                          <button
+                            type="button"
+                            onClick={() => void handleSave(submission, true)}
+                            disabled={savingId === submission.id}
+                            className="btn-secondary btn-sm ml-2"
+                            title="Save this grade and open the next submission waiting for one"
+                          >
+                            Save &amp; next
+                          </button>
                         </td>
                       </tr>
 
@@ -439,10 +518,66 @@ export function TeacherGradingPage() {
                             <div className="mt-2 whitespace-pre-wrap rounded-xl border border-night-border bg-night-panel p-4 text-sm leading-6 text-parchment">
                               {submission.submittedContent || 'No submission text was provided.'}
                             </div>
+                            {submission.attachment?.contentType.startsWith('audio/') && (
+                              <div className="mt-3"><AttachmentAudio id={submission.attachment.id} /></div>
+                            )}
                             {submission.attachment && (
                               <button type="button" className="btn-secondary btn-sm mt-3" onClick={() => void handleDownload(submission)}>
                                 <DownloadIcon className="h-3.5 w-3.5" /> {submission.attachment.fileName}
                               </button>
+                            )}
+                            {hasRubric && task?.rubric && draft.rubric && (
+                              <div className="mt-5">
+                                <p className="eyebrow">Rubric — score each criterion</p>
+                                <ul className="mt-2 flex flex-col gap-3">
+                                  {task.rubric.map((criterion, index) => (
+                                    <li key={criterion.name + index} className="grid gap-2 rounded-xl border border-night-border bg-night-panel p-3 sm:grid-cols-[1fr_auto_2fr] sm:items-center">
+                                      <div>
+                                        <p className="text-sm font-medium text-parchment">{criterion.name}</p>
+                                        {criterion.description && <p className="text-xs text-muted">{criterion.description}</p>}
+                                      </div>
+                                      <label className="flex items-center gap-2 text-xs text-muted">
+                                        <input
+                                          type="number"
+                                          min={0}
+                                          max={criterion.maxPoints}
+                                          value={draft.rubric?.[index]?.points ?? ''}
+                                          aria-label={`${criterion.name} points for ${submission.studentName}`}
+                                          onChange={(event) => handleRubricChange(submission, index, 'points', event.target.value)}
+                                          className="field w-20 py-2"
+                                        />
+                                        / {criterion.maxPoints}
+                                      </label>
+                                      <input
+                                        type="text"
+                                        maxLength={500}
+                                        value={draft.rubric?.[index]?.feedback ?? ''}
+                                        aria-label={`${criterion.name} feedback for ${submission.studentName}`}
+                                        placeholder="Comment on this criterion (optional)"
+                                        onChange={(event) => handleRubricChange(submission, index, 'feedback', event.target.value)}
+                                        className="field py-2"
+                                      />
+                                    </li>
+                                  ))}
+                                </ul>
+                              </div>
+                            )}
+                            {submission.revisions && submission.revisions.length > 0 && (
+                              <details className="mt-5">
+                                <summary className="cursor-pointer text-sm text-muted hover:text-parchment">Earlier versions ({submission.revisions.length})</summary>
+                                <ol className="mt-2 flex flex-col gap-2">
+                                  {[...submission.revisions].reverse().map((revision) => (
+                                    <li key={revision.submittedAt} className="rounded-xl border border-night-border bg-night-panel p-3 text-sm">
+                                      <p className="text-xs text-muted">
+                                        {formatDateTime(revision.submittedAt)}
+                                        {revision.grade !== undefined ? ` · graded ${revision.grade}` : ''}
+                                      </p>
+                                      <p className="mt-1 whitespace-pre-wrap text-parchment/90">{revision.content}</p>
+                                      {revision.feedback && <p className="mt-2 text-xs text-gold">Your feedback then: {revision.feedback}</p>}
+                                    </li>
+                                  ))}
+                                </ol>
+                              </details>
                             )}
                           </td>
                         </tr>

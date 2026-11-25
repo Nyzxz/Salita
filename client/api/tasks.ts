@@ -1,7 +1,9 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import type { ActivityTask, ApiResponse, LectureRecord, User } from '../../shared/src/types.js';
+import type { ActivityTask, ApiResponse, BulkContentResult, LectureRecord, User } from '../../shared/src/types.js';
 import { getUserFromRequest } from '../../server/src/auth/auth.service.js';
 import {
+  bulkContent,
+  parseBulkContentRequest,
   createActivityTask,
   createLecture,
   deleteActivityTask,
@@ -38,6 +40,17 @@ async function handleContentApi(req: VercelRequest, res: VercelResponse): Promis
   }
   if (user.role !== 'TEACHER') {
     sendError(res, 403, 'Your account is not allowed to do that.');
+    return;
+  }
+
+  if (req.method === 'POST' && req.query.content === 'bulk') {
+    const request = parseBulkContentRequest(req.body);
+    if (!request) {
+      sendError(res, 400, 'Choose up to 100 items and an action (and a date when scheduling).');
+      return;
+    }
+    const body: ApiResponse<BulkContentResult> = { success: true, data: await bulkContent(request) };
+    res.status(200).json(body);
     return;
   }
 

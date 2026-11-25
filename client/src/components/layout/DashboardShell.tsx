@@ -2,7 +2,7 @@ import { useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../auth/AuthContext';
 import { Avatar } from '../common/Avatar';
-import { AvatarPicker } from '../profile/AvatarPicker';
+import { AvatarUploader } from '../profile/AvatarUploader';
 import { Brand } from '../common/Brand';
 import { LogOutIcon } from '../common/icons';
 import { NotificationBell } from '../common/NotificationBell';
@@ -47,14 +47,14 @@ export function DashboardShell({ title, subtitle, eyebrow = 'Teacher workspace',
                   type="button"
                   onClick={() => setPickerOpen((value) => !value)}
                   aria-expanded={pickerOpen}
-                  aria-label="Change avatar colour"
+                  aria-label="Change profile picture"
                   className="rounded-full transition hover:ring-2 hover:ring-gold/40"
                 >
-                  <Avatar name={session?.user.name ?? '?'} size="sm" preset={session?.user.avatar} />
+                  <Avatar name={session?.user.name ?? '?'} size="sm" userId={session?.user.id} avatarVersion={session?.user.avatarVersion} />
                 </button>
                 {pickerOpen && (
-                  <div className="surface absolute right-0 top-full z-40 mt-2 w-64 p-4 shadow-xl">
-                    <AvatarPicker />
+                  <div className="surface absolute right-0 top-full z-40 mt-2 w-72 p-4 shadow-xl">
+                    <AvatarUploader accent="gold" />
                   </div>
                 )}
               </div>

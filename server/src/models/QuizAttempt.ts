@@ -12,7 +12,7 @@ export interface IQuizAttempt extends Document {
   feedback: string;
   completedAt: Date;
   /** The questions as they were when the student took the quiz, so later edits don't change old results. */
-  questions: Array<{ questionText: string; options: string[]; correctAnswerIndex: number; points: number }>;
+  questions: Array<{ questionText: string; options: string[]; correctAnswerIndex: number; points: number; explanation?: string }>;
   /** Whether the student may review correct answers for this attempt. */
   reviewable: boolean;
   /** Percentage points deducted because this was a retake. */
@@ -39,6 +39,7 @@ const quizAttemptSchema = new Schema<IQuizAttempt>(
           options: { type: [String], required: true },
           correctAnswerIndex: { type: Number, required: true },
           points: { type: Number, required: true },
+          explanation: { type: String, maxlength: 600 },
         },
       ],
       default: [],

@@ -20,3 +20,15 @@ export function timeZoneName(): string {
 export function gradeWithSection(grade: string, classSection?: string): string {
   return classSection ? `${grade} · ${classSection}` : grade;
 }
+
+/** “in 2 days”, “in 5 hours”, “in 20 minutes”, or “overdue”. */
+export function timeUntil(iso: string, now = Date.now()): { label: string; urgency: 'overdue' | 'soon' | 'week' | 'later' } {
+  const ms = new Date(iso).getTime() - now;
+  if (ms <= 0) return { label: 'overdue', urgency: 'overdue' };
+  const minutes = Math.round(ms / 60_000);
+  if (minutes < 60) return { label: `in ${Math.max(1, minutes)} min`, urgency: 'soon' };
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return { label: `in ${hours} ${hours === 1 ? 'hour' : 'hours'}`, urgency: 'soon' };
+  const days = Math.round(hours / 24);
+  return { label: days === 1 ? 'tomorrow' : `in ${days} days`, urgency: days <= 3 ? 'week' : 'later' };
+}

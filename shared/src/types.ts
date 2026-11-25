@@ -15,6 +15,18 @@ export const VALID_CATEGORIES = ['greetings', 'food', 'values', 'phrases'] as co
 export type Category = (typeof VALID_CATEGORIES)[number];
 
 /** Grade levels offered by the school: Grade 7 to Grade 12 only. */
+/** Quiz difficulty tiers, easiest first. */
+export const QUIZ_DIFFICULTIES = ['EASY', 'MEDIUM', 'INTERMEDIATE', 'HARD'] as const;
+export type QuizDifficulty = (typeof QUIZ_DIFFICULTIES)[number];
+export const DIFFICULTY_LABELS: Record<QuizDifficulty, string> = {
+  EASY: 'Easy',
+  MEDIUM: 'Medium',
+  INTERMEDIATE: 'Intermediate',
+  HARD: 'Hard',
+};
+/** A quiz counts as passed at this percentage or higher. */
+export const PASSING_PERCENT = 70;
+
 export const GRADE_LEVELS = ['Grade 7', 'Grade 8', 'Grade 9', 'Grade 10', 'Grade 11', 'Grade 12'] as const;
 export type GradeLevel = (typeof GRADE_LEVELS)[number];
 
@@ -95,12 +107,14 @@ export interface QuizQuestion {
 export interface QuizContentQuestion {
   /** Only sent to teachers (so they can edit a quiz); students never receive it. */
   correctAnswerIndex?: number;
+  /** Why the correct answer is right. Students see it only in their review after finishing. */
+  explanation?: string;
   questionText: string;
   options: string[];
   points: number;
 }
 
-export interface QuizContent {
+export interface QuizContent extends PublishingFields {
   id: string;
   title: string;
   description: string;
@@ -109,6 +123,8 @@ export interface QuizContent {
   dueDate?: string;
   /** Questions and answer choices are shuffled differently for each attempt. */
   randomize: boolean;
+  /** How hard the quiz is. Quizzes made before tiers existed have none. */
+  difficulty?: QuizDifficulty;
   /** Set for a student when their teacher has unlocked a retake for them. */
   retakeOpen?: boolean;
   gradeLevel: ContentGrade;
@@ -117,13 +133,14 @@ export interface QuizContent {
   createdAt: string;
 }
 
-export interface CreateQuizRequest {
+export interface CreateQuizRequest extends PublishingFields {
   title: string;
   description: string;
   gradeLevel: ContentGrade;
   timeLimitMinutes?: number;
   dueDate?: string;
   randomize?: boolean;
+  difficulty?: QuizDifficulty;
   questions: Array<QuizContentQuestion & { correctAnswerIndex: number }>;
 }
 
@@ -144,6 +161,8 @@ export interface QuizReviewItem {
   userAnswer: number;
   points: number;
   earned: number;
+  /** The teacher's explanation of the correct answer, if they wrote one. */
+  explanation?: string;
 }
 
 /** Response of POST /api/quizzes/:id/start — the server's clock decides when a timed quiz ends. */
@@ -178,7 +197,27 @@ export interface QuizAttemptRecord {
   retakeOpen?: boolean;
 }
 
-export interface LectureRecord {
+/** Scheduling for teacher-made content. Students see an item only when it is live. */
+export interface PublishingFields {
+  /** Hidden from students until this ISO time (a scheduled item). */
+  publishAt?: string;
+  /** Saved but not shown to students at all (a draft). */
+  draft?: boolean;
+}
+
+export interface RubricCriterion {
+  name: string;
+  description?: string;
+  /** Points available for this criterion; a task's total is the sum of its criteria. */
+  maxPoints: number;
+}
+
+export interface RubricScore {
+  points: number;
+  feedback?: string;
+}
+
+export interface LectureRecord extends PublishingFields {
   id: string;
   word: string;
   translation: string;
@@ -190,7 +229,7 @@ export interface LectureRecord {
   createdAt: string;
 }
 
-export interface CreateLectureRequest {
+export interface CreateLectureRequest extends PublishingFields {
   gradeLevel: ContentGrade;
   word: string;
   translation: string;
@@ -203,13 +242,15 @@ export interface CreateLectureRequest {
 /** Editing a lecture replaces its fields. */
 export type UpdateLectureRequest = CreateLectureRequest;
 
-export interface CreateActivityTaskRequest {
+export interface CreateActivityTaskRequest extends PublishingFields {
   gradeLevel: ContentGrade;
   type: TaskType;
   title: string;
   description: string;
+  /** With a rubric this must equal the sum of the criteria. */
   totalPoints: number;
   dueDate: string;
+  rubric?: RubricCriterion[];
 }
 
 /** Editing an activity or task replaces its fields (the type cannot change). */
@@ -246,16 +287,14 @@ export interface User {
   classSection?: string;
   /** True until a student replaces the default password a teacher gave them. */
   mustChangePassword?: boolean;
-  /** Chosen avatar colour preset; initials are drawn on it. Unset means the default. */
-  avatar?: string;
+  /** Set when the user has uploaded a profile picture; changes each time it is replaced. */
+  avatarVersion?: number;
 }
 
 /** Body of PUT /api/auth/me — a signed-in user editing their own profile. */
 export interface UpdateProfileRequest {
   fullName?: string;
   email?: string;
-  /** An avatar preset id, or an empty string to go back to the default. */
-  avatar?: string;
 }
 
 /** Body of POST /api/auth/me?action=password. Responds with a fresh AuthSession. */
@@ -334,7 +373,8 @@ export interface ClassSectionRecord {
 
 export type TaskType = 'ACTIVITY' | 'PERFORMANCE_TASK';
 
-export interface ActivityTask {
+export interface ActivityTask extends PublishingFields {
+  rubric?: RubricCriterion[];
   id: string;
   type: TaskType;
   gradeLevel: ContentGrade;
@@ -360,10 +400,38 @@ export interface SubmissionRecord {
   /** True when the work arrived after the task's due date. */
   late?: boolean;
   attachment?: AttachmentInfo;
+  /** Per-criterion marks when the task has a rubric. */
+  rubricScores?: RubricScore[];
+  /** Earlier versions, oldest first, kept when the student resubmits. */
+  revisions?: SubmissionRevision[];
+}
+
+export interface SubmissionRevision {
+  content: string;
+  submittedAt: string;
+  grade?: number;
+  feedback?: string;
+  rubricScores?: RubricScore[];
+}
+
+export type BulkContentAction = 'publish' | 'draft' | 'schedule' | 'delete';
+
+export interface BulkContentRequest {
+  action: BulkContentAction;
+  /** Required for 'schedule'. */
+  publishAt?: string;
+  items: Array<{ kind: 'lecture' | 'task' | 'quiz'; id: string }>;
+}
+
+export interface BulkContentResult {
+  changed: number;
+  skipped: number;
 }
 
 export interface GradeSubmissionRequest {
+  /** Ignored when `rubricScores` is given: the total is then the sum of the criteria. */
   grade: number;
+  rubricScores?: RubricScore[];
   feedback?: string;
   /** The `submittedAt` the teacher was looking at; if the student resubmitted since, saving is refused. */
   expectedSubmittedAt?: string;
@@ -394,6 +462,42 @@ export interface NotificationRecord {
   link?: string;
   createdAt: string;
   read: boolean;
+}
+
+export interface QuestionBankItemRecord {
+  id: string;
+  questionText: string;
+  options: string[];
+  correctAnswerIndex: number;
+  points: number;
+  explanation?: string;
+  /** Lower-case topic tag, e.g. "greetings". */
+  topic: string;
+  difficulty: QuizDifficulty;
+}
+
+export type SaveBankQuestionRequest = Omit<QuestionBankItemRecord, 'id'>;
+
+export interface QuestionBankList {
+  items: QuestionBankItemRecord[];
+  /** Every topic in the bank, for the filter. */
+  topics: string[];
+}
+
+export interface Badge {
+  id: string;
+  title: string;
+  description: string;
+  earned: boolean;
+}
+
+export interface Achievements {
+  /** Consecutive days (ending today or yesterday) with a quiz or submission. */
+  currentStreak: number;
+  longestStreak: number;
+  /** True when the student has already done something today. */
+  activeToday: boolean;
+  badges: Badge[];
 }
 
 export interface NotificationFeed {
@@ -435,6 +539,7 @@ export interface QuizAnalyticsItem {
   gradeLevel: string;
   attempts: number;
   students: number;
+  difficulty?: QuizDifficulty;
   averagePercent: number;
   highestPercent: number;
   lowestPercent: number;
@@ -450,6 +555,23 @@ export interface StudentProgressItem {
   quizAveragePercent: number | null;
   tasksGraded: number;
   taskAveragePercent: number | null;
+  /** Where the student stands on each difficulty tier that has quizzes for their grade. */
+  tiers: TierProgress[];
+  /** Plain-language reasons this student may need help; empty when all is well. */
+  atRisk: string[];
+}
+
+export type TierStatus = 'PASSED' | 'IN_PROGRESS' | 'NOT_STARTED';
+
+export interface TierProgress {
+  difficulty: QuizDifficulty;
+  /** Quizzes in this tier that are assigned to the student's grade. */
+  total: number;
+  /** Of those, how many the student has passed (best score at or above the pass mark). */
+  passed: number;
+  /** Of those, how many the student has tried at least once. */
+  attempted: number;
+  status: TierStatus;
 }
 
 export interface TeacherAnalytics {

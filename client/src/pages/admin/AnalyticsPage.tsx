@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
-import type { QuizAnalyticsItem, StudentProgressItem, TeacherAnalytics } from '@shared/types';
+import type { QuizAnalyticsItem, StudentProgressItem, TeacherAnalytics, TierStatus } from '@shared/types';
+import { DIFFICULTY_LABELS } from '@shared/types';
 import { fetchTeacherAnalytics } from '../../api/quizzes';
 import { downloadGradebook } from '../../api/admin';
 import { ApiRequestError, saveBlob } from '../../api/client';
@@ -71,13 +72,35 @@ function QuizCard({ quiz }: { quiz: QuizAnalyticsItem }) {
   );
 }
 
+const TIER_STYLE: Record<TierStatus, string> = {
+  PASSED: 'badge-leaf',
+  IN_PROGRESS: 'badge-gold',
+  NOT_STARTED: 'badge-neutral',
+};
+
+function TierCells({ student }: { student: StudentProgressItem }) {
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {student.tiers.map((tier) => (
+        <span
+          key={tier.difficulty}
+          className={TIER_STYLE[tier.status]}
+          title={tier.total === 0 ? 'No quizzes at this level for this grade' : `${tier.passed} of ${tier.total} passed, ${tier.attempted} tried`}
+        >
+          {DIFFICULTY_LABELS[tier.difficulty]} {tier.total === 0 ? '–' : `${tier.passed}/${tier.total}`}
+        </span>
+      ))}
+    </div>
+  );
+}
+
 function StudentTable({ students }: { students: StudentProgressItem[] }) {
   const cell = (value: number | null) => (value === null ? <span className="text-muted">—</span> : <span className={badge(value)}>{value}%</span>);
   return (
     <div className="table-wrap overflow-x-auto">
       <table className="data-table">
         <thead>
-          <tr><th>Student</th><th>Grade</th><th>Quizzes taken</th><th>Quiz average</th><th>Tasks graded</th><th>Task average</th></tr>
+          <tr><th>Student</th><th>Grade</th><th>Quizzes taken</th><th>Quiz average</th><th>Tasks graded</th><th>Task average</th><th>Levels passed (70%+)</th><th>Needs attention</th></tr>
         </thead>
         <tbody>
           {students.map((student) => (
@@ -88,6 +111,12 @@ function StudentTable({ students }: { students: StudentProgressItem[] }) {
               <td>{cell(student.quizAveragePercent)}</td>
               <td className="text-muted">{student.tasksGraded}</td>
               <td>{cell(student.taskAveragePercent)}</td>
+              <td><TierCells student={student} /></td>
+              <td>
+                {student.atRisk.length === 0 ? <span className="text-muted">—</span> : (
+                  <ul className="flex flex-col gap-1">{student.atRisk.map((reason) => <li key={reason}><span className="badge-clay">{reason}</span></li>)}</ul>
+                )}
+              </td>
             </tr>
           ))}
         </tbody>

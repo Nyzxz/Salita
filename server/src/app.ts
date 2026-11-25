@@ -41,6 +41,8 @@ export function createApp(): Express {
   );
   // File uploads arrive as base64 JSON, so that one router gets a bigger body limit (parsed before the global one).
   app.use('/api/submissions', express.json({ limit: '2mb' }));
+  // Profile pictures are posted as base64 (shrunk to a small square by the browser first).
+  app.use('/api/auth/me', express.json({ limit: '400kb' }));
   app.use(express.json({ limit: '32kb' }));
   app.use(
     '/api',

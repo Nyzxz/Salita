@@ -3,9 +3,11 @@ import { AudioButton } from './AudioButton';
 
 interface VocabCardProps {
   word: WordItem;
+  isFavorite?: boolean;
+  onToggleFavorite?: (wordId: string) => void;
 }
 
-export function VocabCard({ word }: VocabCardProps) {
+export function VocabCard({ word, isFavorite = false, onToggleFavorite }: VocabCardProps) {
   return (
     <article className="surface-interactive group flex h-full flex-col gap-4 p-6">
       <div className="flex items-start justify-between gap-3">
@@ -13,7 +15,20 @@ export function VocabCard({ word }: VocabCardProps) {
           <h3 className="text-2xl font-semibold text-parchment">{word.word}</h3>
           <p className="mt-1 text-sm italic text-gold-soft">{word.phonetic}</p>
         </div>
-        <AudioButton audioUrl={word.audioUrl} label={word.word} />
+        <div className="flex flex-none items-center gap-2">
+          {onToggleFavorite && (
+            <button
+              type="button"
+              onClick={() => onToggleFavorite(word.id)}
+              aria-pressed={isFavorite}
+              aria-label={isFavorite ? `Remove ${word.word} from favourites` : `Add ${word.word} to favourites`}
+              className={`text-xl leading-none transition ${isFavorite ? 'text-clay' : 'text-muted hover:text-clay'}`}
+            >
+              {isFavorite ? '♥' : '♡'}
+            </button>
+          )}
+          <AudioButton audioUrl={word.audioUrl} label={word.word} />
+        </div>
       </div>
 
       <p className="text-base font-medium text-parchment">{word.translation}</p>

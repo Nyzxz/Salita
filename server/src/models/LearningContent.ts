@@ -16,9 +16,21 @@ export interface LearningContentDocument extends Document {
   description?: string;
   totalPoints?: number;
   dueDate?: Date;
+  rubric?: Array<{ name: string; description?: string; maxPoints: number }>;
+  publishAt?: Date | null;
+  isDraft?: boolean;
   createdBy: Types.ObjectId;
   createdAt: Date;
 }
+
+const rubricSchema = new Schema(
+  {
+    name: { type: String, required: true, trim: true, maxlength: 100 },
+    description: { type: String, trim: true, maxlength: 300 },
+    maxPoints: { type: Number, required: true, min: 1, max: 1000 },
+  },
+  { _id: false },
+);
 
 const learningContentSchema = new Schema<LearningContentDocument>(
   {
@@ -34,6 +46,9 @@ const learningContentSchema = new Schema<LearningContentDocument>(
     description: { type: String, trim: true, maxlength: 5000 },
     totalPoints: { type: Number, min: 1 },
     dueDate: { type: Date },
+    rubric: { type: [rubricSchema], default: undefined },
+    publishAt: { type: Date },
+    isDraft: { type: Boolean, default: false },
     createdBy: { type: Schema.Types.ObjectId, ref: 'User', required: true },
   },
   { timestamps: { createdAt: true, updatedAt: false } },

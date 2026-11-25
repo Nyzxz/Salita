@@ -47,6 +47,47 @@ function buildLayout(quiz: QuizContent): QuestionLayout[] {
   return shuffle(layout).map((entry) => ({ ...entry, optionOrder: shuffle(entry.optionOrder) }));
 }
 
+interface QuizDraft {
+  answers: number[];
+  flagged: number[];
+  layout: QuestionLayout[];
+}
+
+/** Answers are kept in this browser while a quiz is open, so a refresh doesn't lose them. */
+function draftKey(userId: string, quizId: string): string {
+  return `salita.quizdraft.${userId}.${quizId}`;
+}
+function loadQuizDraft(userId: string, quiz: QuizContent): QuizDraft | null {
+  try {
+    const raw = window.localStorage.getItem(draftKey(userId, quiz.id));
+    if (!raw) return null;
+    const draft = JSON.parse(raw) as QuizDraft;
+    const count = quiz.questions.length;
+    const valid =
+      Array.isArray(draft.answers) && draft.answers.length === count && Array.isArray(draft.layout) && draft.layout.length === count &&
+      draft.layout.every((entry) => Number.isInteger(entry.questionIndex) && entry.questionIndex >= 0 && entry.questionIndex < count &&
+        Array.isArray(entry.optionOrder) && entry.optionOrder.length === quiz.questions[entry.questionIndex].options.length);
+    return valid ? { answers: draft.answers, flagged: Array.isArray(draft.flagged) ? draft.flagged : [], layout: draft.layout } : null;
+  } catch {
+    return null;
+  }
+}
+function saveQuizDraft(userId: string, quizId: string, draft: QuizDraft | null): void {
+  try {
+    if (draft) window.localStorage.setItem(draftKey(userId, quizId), JSON.stringify(draft));
+    else window.localStorage.removeItem(draftKey(userId, quizId));
+  } catch {
+    /* drafts are a convenience only */
+  }
+}
+function hasQuizDraft(userId: string, quizId: string): boolean {
+  try {
+    return window.localStorage.getItem(draftKey(userId, quizId)) !== null;
+  } catch {
+    return false;
+  }
+}
+
 export function AssignedQuizzes() {
   const { session } = useAuth();
   const token = session?.token ?? '';
@@ -55,6 +96,9 @@ export function AssignedQuizzes() {
   const [selectedQuiz, setSelectedQuiz] = useState<QuizContent | null>(null);
   const [answers, setAnswers] = useState<number[]>([]);
   const [layout, setLayout] = useState<QuestionLayout[]>([]);
+  const [flagged, setFlagged] = useState<number[]>([]);
+  const [confirming, setConfirming] = useState(false);
+  const userId = session?.user.id ?? '';
   const [latestAttempt, setLatestAttempt] = useState<QuizAttemptRecord | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -94,8 +138,13 @@ export function AssignedQuizzes() {
       const started = await startQuiz(quiz.id, token);
       setDeadline(started.expiresAt ? new Date(started.expiresAt).getTime() : null);
       setSelectedQuiz(quiz);
-      setAnswers(Array(quiz.questions.length).fill(-1) as number[]);
-      setLayout(buildLayout(quiz));
+      // The server keeps the original clock for a quiz that is still running, so picking up
+      // where the student left off (after a refresh) is safe.
+      const draft = loadQuizDraft(userId, quiz);
+      setAnswers(draft?.answers ?? (Array(quiz.questions.length).fill(-1) as number[]));
+      setLayout(draft?.layout ?? buildLayout(quiz));
+      setFlagged(draft?.flagged ?? []);
+      setConfirming(false);
       setLatestAttempt(null);
     } catch (cause) {
       setError(cause instanceof ApiRequestError ? cause.message : 'Could not start this quiz.');
@@ -113,6 +162,7 @@ export function AssignedQuizzes() {
       setError(null);
       try {
         const attempt = await submitQuizAttempt(selectedQuiz.id, { userAnswers: current }, token);
+        saveQuizDraft(userId, selectedQuiz.id, null);
         setLatestAttempt(attempt);
         setAttempts((previous) => [attempt, ...previous]);
         // A used-up retake is gone; the quiz list shows it as completed again.
@@ -124,8 +174,16 @@ export function AssignedQuizzes() {
         setIsSubmitting(false);
       }
     },
-    [selectedQuiz, token],
+    [selectedQuiz, token, userId],
   );
+
+  // Save answers as they change.
+  useEffect(() => {
+    if (selectedQuiz && !latestAttempt && layout.length > 0) saveQuizDraft(userId, selectedQuiz.id, { answers, flagged, layout });
+  }, [answers, flagged, layout, selectedQuiz, latestAttempt, userId]);
+
+  const toggleFlag = (questionIndex: number) =>
+    setFlagged((current) => (current.includes(questionIndex) ? current.filter((value) => value !== questionIndex) : [...current, questionIndex]));
 
   // Countdown for timed quizzes. The server enforces the limit; this just keeps the student informed
   // and submits what they have when time runs out.
@@ -175,7 +233,7 @@ export function AssignedQuizzes() {
               <p
                 role="timer"
                 aria-live="off"
-                className={`mt-3 ${secondsLeft !== null && secondsLeft <= 60 ? 'badge-clay' : 'badge-neutral'}`}
+                className={`sticky top-20 z-20 mt-3 shadow-lg ${secondsLeft !== null && secondsLeft <= 60 ? 'badge-clay' : 'badge-gold'}`}
               >
                 <ClockIcon className="h-3 w-3" />
                 {secondsLeft === null
@@ -193,6 +251,14 @@ export function AssignedQuizzes() {
                   <span className="flex h-6 w-6 flex-none items-center justify-center rounded-md bg-gold/15 text-xs font-bold text-gold">{position + 1}</span>
                   <span className="flex-1">{question.questionText}</span>
                   <span className="badge-neutral flex-none">{question.points} pts</span>
+                  <button
+                    type="button"
+                    onClick={() => toggleFlag(questionIndex)}
+                    aria-pressed={flagged.includes(questionIndex)}
+                    className={`flex-none rounded-md border px-2 py-0.5 text-xs transition ${flagged.includes(questionIndex) ? 'border-gold bg-gold/15 text-gold' : 'border-night-border text-muted hover:text-parchment'}`}
+                  >
+                    {flagged.includes(questionIndex) ? '⚑ Flagged' : '⚐ Flag'}
+                  </button>
                 </legend>
                 {optionOrder.map((optionIndex) => (
                   <label
@@ -218,14 +284,49 @@ export function AssignedQuizzes() {
             );
           })}
 
-          <button
-            type="button"
-            disabled={isSubmitting || answers.some((answer) => answer < 0)}
-            onClick={() => void handleSubmit()}
-            className="btn-primary self-start"
-          >
-            {isSubmitting ? 'Submitting…' : 'Submit quiz'}
-          </button>
+          {confirming ? (
+            <div className="rounded-2xl border border-gold/30 bg-gold/5 p-5" role="region" aria-label="Check your answers before submitting">
+              <h4 className="text-lg font-semibold text-parchment">Check your answers</h4>
+              <p className="mt-1 text-sm text-muted">
+                {answers.filter((answer) => answer >= 0).length} of {answers.length} answered
+                {flagged.length > 0 ? ` · ${flagged.length} flagged` : ''}. You can’t change them after you submit.
+              </p>
+              <ol className="mt-4 grid grid-cols-5 gap-2 sm:grid-cols-8">
+                {layout.map(({ questionIndex }, position) => {
+                  const answered = answers[questionIndex] >= 0;
+                  return (
+                    <li key={questionIndex}>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setConfirming(false);
+                          window.setTimeout(() => document.getElementsByName(`question-${questionIndex}`)[0]?.scrollIntoView({ block: 'center' }), 50);
+                        }}
+                        aria-label={`Question ${position + 1}: ${answered ? 'answered' : 'not answered'}${flagged.includes(questionIndex) ? ', flagged' : ''}`}
+                        className={`relative w-full rounded-lg border py-2 text-sm font-semibold ${answered ? 'border-leaf/50 bg-leaf/10 text-leaf' : 'border-clay/50 bg-clay/10 text-clay'}`}
+                      >
+                        {position + 1}
+                        {flagged.includes(questionIndex) && <span className="absolute -right-1 -top-1 text-xs text-gold">⚑</span>}
+                      </button>
+                    </li>
+                  );
+                })}
+              </ol>
+              <div className="mt-5 flex flex-wrap gap-3">
+                <button type="button" className="btn-secondary" onClick={() => setConfirming(false)}>Keep working</button>
+                <button type="button" disabled={isSubmitting} onClick={() => void handleSubmit(true)} className="btn-primary">
+                  {isSubmitting ? 'Submitting…' : 'Submit quiz'}
+                </button>
+              </div>
+              {answers.some((answer) => answer < 0) && (
+                <p className="mt-3 text-xs text-clay">Unanswered questions will count as wrong.</p>
+              )}
+            </div>
+          ) : (
+            <button type="button" onClick={() => setConfirming(true)} className="btn-primary self-start">
+              Review and submit
+            </button>
+          )}
         </div>
       ) : latestAttempt ? (
         <div className="surface animate-scale-in p-8 text-center sm:p-10">
@@ -286,7 +387,7 @@ export function AssignedQuizzes() {
                   </button>
                 ) : (
                   <button type="button" onClick={() => void beginQuiz(quiz)} disabled={isStarting || isBlocked} className="btn-primary btn-sm mt-5 self-start">
-                    {isClosed ? 'Quiz closed' : quiz.retakeOpen ? 'Start retake' : 'Start quiz'}
+                    {isClosed ? 'Quiz closed' : hasQuizDraft(userId, quiz.id) ? 'Resume quiz' : quiz.retakeOpen ? 'Start retake' : 'Start quiz'}
                     {!isBlocked && <ArrowRightIcon className="h-3.5 w-3.5" />}
                   </button>
                 )}

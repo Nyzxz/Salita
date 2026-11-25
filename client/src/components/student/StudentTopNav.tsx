@@ -51,7 +51,7 @@ export function StudentTopNav({ activeTab, onChangeTab, studentName, onSignOut }
               aria-label={`Account menu for ${studentName}`}
               className="flex items-center gap-2 rounded-full p-0.5 transition hover:ring-2 hover:ring-gold/40 focus-visible:ring-2 focus-visible:ring-gold"
             >
-              <Avatar name={studentName} size="md" accent="leaf" preset={session?.user.avatar} />
+              <Avatar name={studentName} size="md" accent="leaf" userId={session?.user.id} avatarVersion={session?.user.avatarVersion} />
             </button>
             {open && (
               <div role="menu" className="surface absolute right-0 top-full z-40 mt-2 w-60 animate-fade-in overflow-hidden p-1.5 shadow-xl">

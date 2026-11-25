@@ -5,6 +5,7 @@ export interface IQuestion {
   options: string[];
   correctAnswerIndex: number;
   points: number;
+  explanation?: string;
 }
 
 export interface IQuiz extends Document {
@@ -13,6 +14,9 @@ export interface IQuiz extends Document {
   timeLimitMinutes?: number | null;
   dueDate?: Date | null;
   randomize: boolean;
+  difficulty?: string;
+  publishAt?: Date | null;
+  isDraft?: boolean;
   gradeLevel?: string;
   questions: IQuestion[];
   createdBy: Types.ObjectId;
@@ -25,6 +29,7 @@ const questionSchema = new Schema<IQuestion>(
     options: { type: [String], required: true, validate: (values: string[]) => values.length === 4 },
     correctAnswerIndex: { type: Number, required: true, min: 0, max: 3 },
     points: { type: Number, required: true, min: 1 },
+    explanation: { type: String, trim: true, maxlength: 600 },
   },
   { _id: false },
 );
@@ -36,6 +41,9 @@ const quizSchema = new Schema<IQuiz>(
     timeLimitMinutes: { type: Number, min: 1, max: 600 },
     dueDate: { type: Date, default: null },
     randomize: { type: Boolean, default: false },
+    publishAt: { type: Date },
+    isDraft: { type: Boolean, default: false },
+    difficulty: { type: String, enum: ['EASY', 'MEDIUM', 'INTERMEDIATE', 'HARD'] },
     gradeLevel: { type: String, enum: ['ALL', 'Grade 7', 'Grade 8', 'Grade 9', 'Grade 10', 'Grade 11', 'Grade 12'], default: 'ALL' },
     questions: { type: [questionSchema], required: true, validate: (items: IQuestion[]) => items.length > 0 },
     createdBy: { type: Schema.Types.ObjectId, ref: 'User', required: true },

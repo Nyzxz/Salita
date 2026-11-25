@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react';
 import { SpeakerIcon } from '../common/icons';
+import { canSpeak, speakFilipino } from '../../lib/speech';
 
 interface AudioButtonProps {
   audioUrl?: string;
@@ -10,10 +11,15 @@ export function AudioButton({ audioUrl, label }: AudioButtonProps) {
   const [isPlaying, setIsPlaying] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
-  // No recording yet: show nothing rather than an inert "coming soon" chip.
-  if (!audioUrl) return null;
+  // No recording: say the word with the browser's voice instead. If that isn't possible, show nothing.
+  if (!audioUrl && !canSpeak()) return null;
 
   const handleClick = () => {
+    if (!audioUrl) {
+      setIsPlaying(true);
+      speakFilipino(label, () => setIsPlaying(false));
+      return;
+    }
     if (!audioRef.current) {
       audioRef.current = new Audio(audioUrl);
       audioRef.current.addEventListener('ended', () => setIsPlaying(false));

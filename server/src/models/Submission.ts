@@ -12,7 +12,32 @@ export interface SubmissionDocument extends Document {
   resubmittedAfterGrade?: boolean;
   late?: boolean;
   attachment?: { id: Types.ObjectId; fileName: string; contentType: string; size: number } | null;
+  rubricScores?: Array<{ points: number; feedback?: string }>;
+  revisions?: Array<{
+    content: string;
+    submittedAt: Date;
+    grade?: number;
+    feedback?: string;
+    rubricScores?: Array<{ points: number; feedback?: string }>;
+  }>;
 }
+
+const rubricScoreSchema = new Schema(
+  { points: { type: Number, required: true, min: 0 }, feedback: { type: String, trim: true, maxlength: 500 } },
+  { _id: false },
+);
+
+/** What a student had handed in before resubmitting, with the teacher's response to it. */
+const revisionSchema = new Schema(
+  {
+    content: { type: String, required: true, maxlength: 10000 },
+    submittedAt: { type: Date, required: true },
+    grade: { type: Number, min: 0 },
+    feedback: { type: String, maxlength: 2000 },
+    rubricScores: { type: [rubricScoreSchema], default: undefined },
+  },
+  { _id: false },
+);
 
 /** The file a student attached; the bytes live in the Attachment collection. */
 const attachmentSchema = new Schema(
@@ -38,6 +63,8 @@ const submissionSchema = new Schema<SubmissionDocument>(
     resubmittedAfterGrade: { type: Boolean, default: false },
     late: { type: Boolean, default: false },
     attachment: { type: attachmentSchema, default: undefined },
+    rubricScores: { type: [rubricScoreSchema], default: undefined },
+    revisions: { type: [revisionSchema], default: undefined },
   },
   { timestamps: true },
 );

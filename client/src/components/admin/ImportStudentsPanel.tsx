@@ -101,7 +101,7 @@ export function ImportStudentsPanel({ onImported }: ImportStudentsPanelProps) {
 
       {fileName && <p className="mt-3 text-xs text-muted">{fileName}</p>}
 
-      {problems.length > 0 && (
+      {problems.length > 0 && !results && (
         <Notice tone="error" className="mt-4">
           <ul className="list-disc space-y-0.5 pl-4">
             {problems.slice(0, 8).map((problem) => <li key={problem}>{problem}</li>)}
@@ -141,12 +141,27 @@ export function ImportStudentsPanel({ onImported }: ImportStudentsPanelProps) {
               </button>
             </div>
           )}
-          {skipped.length > 0 && (
-            <ul className="space-y-1 text-sm text-muted">
-              {skipped.map((result, index) => (
-                <li key={`${result.username}-${index}`}><span className="font-mono text-parchment">{result.username || '(blank)'}</span> — {result.reason}</li>
-              ))}
-            </ul>
+          <div className="table-wrap">
+            <table className="data-table">
+              <caption className="sr-only">Import report, one row per student in the file</caption>
+              <thead><tr><th>#</th><th>Username</th><th>Result</th><th>Reason</th></tr></thead>
+              <tbody>
+                {results.map((result, index) => (
+                  <tr key={`${result.username}-${index}`}>
+                    <td className="text-muted">{index + 1}</td>
+                    <td className="font-mono">{result.username || '(blank)'}</td>
+                    <td><span className={result.status === 'created' ? 'badge-leaf' : 'badge-clay'}>{result.status === 'created' ? 'Created' : 'Skipped'}</span></td>
+                    <td className="text-muted">{result.status === 'created' ? '—' : result.reason}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {problems.length > 0 && (
+            <div>
+              <p className="text-sm text-parchment">Rows that could not be read and were never uploaded:</p>
+              <ul className="mt-1 list-disc space-y-1 pl-5 text-sm text-muted">{problems.map((problem) => <li key={problem}>{problem}</li>)}</ul>
+            </div>
           )}
         </div>
       )}

@@ -21,10 +21,14 @@ const ALLOWED: AllowedType[] = [
     extensions: ['docx'],
     matches: (b) => startsWith(b, [0x50, 0x4b, 0x03, 0x04]),
   },
+  // Voice recordings made in the browser (MediaRecorder): WebM in Chrome/Brave/Firefox/Edge, MP4 in Safari.
+  { contentType: 'audio/webm', extensions: ['webm'], matches: (b) => startsWith(b, [0x1a, 0x45, 0xdf, 0xa3]) },
+  { contentType: 'audio/ogg', extensions: ['ogg'], matches: (b) => startsWith(b, [0x4f, 0x67, 0x67, 0x53]) },
+  { contentType: 'audio/mp4', extensions: ['m4a'], matches: (b) => b.length > 8 && b.subarray(4, 8).toString('latin1') === 'ftyp' },
   { contentType: 'text/plain', extensions: ['txt'], matches: (b) => !b.includes(0) },
 ];
 
-export const ATTACHMENT_HELP = 'PDF, PNG, JPG, DOCX or TXT, up to 1 MB.';
+export const ATTACHMENT_HELP = 'PDF, PNG, JPG, DOCX, TXT or a voice recording, up to 1 MB.';
 
 /** Removes path parts and odd characters from an uploaded file name. */
 export function safeFileName(name: string): string {
@@ -41,6 +45,8 @@ export function safeFileName(name: string): string {
 export function checkAttachment(fileName: string, claimedType: string, bytes: Buffer): { contentType: string } | { error: string } {
   if (bytes.length === 0) return { error: 'That file is empty.' };
   if (bytes.length > MAX_ATTACHMENT_BYTES) return { error: 'That file is too large. The limit is 1 MB.' };
+  // Browsers report recordings as e.g. "audio/webm;codecs=opus"; compare the base type only.
+  claimedType = claimedType.split(';')[0].trim();
   const extension = fileName.split('.').pop()?.toLowerCase() ?? '';
   const allowed = ALLOWED.find((type) => type.extensions.includes(extension));
   if (!allowed || (claimedType && claimedType !== allowed.contentType && claimedType !== 'application/octet-stream')) {

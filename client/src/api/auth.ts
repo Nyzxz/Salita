@@ -1,4 +1,5 @@
 import type {
+  Achievements,
   AuthSession,
   ChangePasswordRequest,
   LoginRequest,
@@ -6,7 +7,7 @@ import type {
   UpdateProfileRequest,
   User,
 } from '@shared/types';
-import { apiGet, apiPost, apiPut } from './client';
+import { apiDelete, apiGet, apiPost, apiPut } from './client';
 
 export function loginRequest(credentials: LoginRequest): Promise<AuthSession> {
   return apiPost<AuthSession>('/api/auth/login', credentials);
@@ -31,10 +32,28 @@ export function logoutRequest(): Promise<null> {
   return apiPost<null>('/api/auth/me?action=logout', {});
 }
 
+export function fetchAchievements(): Promise<Achievements> {
+  return apiGet<Achievements>('/api/auth/me', { action: 'achievements' });
+}
+
 export function fetchNotifications(): Promise<NotificationFeed> {
   return apiGet<NotificationFeed>('/api/auth/me', { action: 'notifications' });
 }
 
 export function markNotificationsRead(request: { ids: string[] } | { all: true }): Promise<NotificationFeed> {
   return apiPost<NotificationFeed>('/api/auth/me?action=notifications-read', request);
+}
+
+/** Saves a profile picture (base64 JPEG/PNG, already shrunk) and returns the updated user. */
+export function uploadAvatar(imageBase64: string): Promise<User> {
+  return apiPost<User>('/api/auth/me?action=avatar', { image: imageBase64 });
+}
+
+export function deleteAvatar(): Promise<User> {
+  return apiDelete<User>('/api/auth/me?action=avatar');
+}
+
+/** Where a user's picture is served from. The version in the URL refreshes the browser cache. */
+export function avatarUrl(userId: string, version: number): string {
+  return `/api/auth/me?action=avatar&id=${encodeURIComponent(userId)}&v=${version}`;
 }

@@ -1,5 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import type { ApiResponse, AuthSession, NotificationFeed, User } from '../../../shared/src/types.js';
+import { parseAvatarUpload, readAvatar, removeAvatar, saveAvatar } from '../../../server/src/auth/avatar.service.js';
+import type { Achievements, ApiResponse, AuthSession, NotificationFeed, User } from '../../../shared/src/types.js';
 import {
   changePassword,
   getUserFromRequest,
@@ -10,11 +11,13 @@ import {
 import { clearSessionCookie } from '../../../server/src/auth/cookies.js';
 import { toCookieSession } from '../../../server/src/auth/sessionResponse.js';
 import {
+  ensureDueSoonReminders,
   listNotifications,
   markNotificationsRead,
   parseMarkReadRequest,
   streamNotificationEvents,
 } from '../../../server/src/notifications/notifications.service.js';
+import { getAchievements } from '../../../server/src/achievements/achievements.service.js';
 
 function fail(res: VercelResponse, status: number, error: string): void {
   const body: ApiResponse<null> = { success: false, data: null, error };
@@ -27,6 +30,7 @@ function fail(res: VercelResponse, status: number, error: string): void {
  * POST /api/auth/me?action=password          — change my password (sets a fresh session cookie)
  * POST /api/auth/me?action=logout            — end my session (clears the cookie)
  * GET  /api/auth/me?action=notifications     — my notifications and unread count
+ * GET  /api/auth/me?action=achievements      — my streak and badges
  * GET  /api/auth/me?action=events            — live update stream (server-sent events, ~50 s per connection)
  * POST /api/auth/me?action=notifications-read — mark notifications read ({ ids } or { all: true })
  * (One function for all of these keeps the project inside Vercel's 12-function limit.)
@@ -50,6 +54,42 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
     return;
   }
 
+  // Profile picture: GET (?id=), POST { image } to set, DELETE to remove.
+  if (req.query.action === 'avatar') {
+    if (req.method === 'GET') {
+      const id = typeof req.query.id === 'string' ? req.query.id : user.id;
+      const image = await readAvatar(user, id);
+      if ('error' in image) {
+        fail(res, image.status, image.error);
+        return;
+      }
+      res.setHeader('Content-Type', image.data.contentType);
+      res.setHeader('X-Content-Type-Options', 'nosniff');
+      res.setHeader('Content-Security-Policy', "sandbox; default-src 'none'");
+      // The URL carries the version, so a replaced picture gets a new URL.
+      res.setHeader('Cache-Control', 'private, max-age=86400');
+      res.status(200).send(image.data.data);
+      return;
+    }
+    if (req.method === 'POST') {
+      const upload = parseAvatarUpload(req.body);
+      if ('error' in upload) {
+        fail(res, 400, upload.error);
+        return;
+      }
+      await saveAvatar(user.id, upload);
+      const fresh = await getUserFromRequest(req, { allowPasswordChange: true });
+      res.status(200).json({ success: true, data: fresh });
+      return;
+    }
+    if (req.method === 'DELETE') {
+      await removeAvatar(user.id);
+      const fresh = await getUserFromRequest(req, { allowPasswordChange: true });
+      res.status(200).json({ success: true, data: fresh });
+      return;
+    }
+  }
+
   // Live updates: a short-lived event stream. The browser reconnects when it ends.
   if (req.method === 'GET' && req.query.action === 'events') {
     res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
@@ -71,7 +111,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
     return;
   }
 
+  if (req.method === 'GET' && req.query.action === 'achievements') {
+    const body: ApiResponse<Achievements> = { success: true, data: await getAchievements(user) };
+    res.status(200).json(body);
+    return;
+  }
+
   if (req.method === 'GET' && req.query.action === 'notifications') {
+    if (user.role === 'STUDENT') await ensureDueSoonReminders(user);
     const body: ApiResponse<NotificationFeed> = { success: true, data: await listNotifications(user.id) };
     res.status(200).json(body);
     return;

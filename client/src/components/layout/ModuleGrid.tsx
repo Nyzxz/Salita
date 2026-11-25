@@ -8,6 +8,9 @@ export interface ModuleInfo {
   /** When present, the tile links here and renders as active instead of "Coming next". */
   href?: string;
   icon?: ComponentType<SVGProps<SVGSVGElement>>;
+  /** A count shown as a red badge on the tile (hidden when 0 or missing). */
+  badge?: number;
+  badgeLabel?: string;
 }
 
 export function ModuleGrid({ modules }: { modules: ModuleInfo[] }) {
@@ -30,6 +33,11 @@ export function ModuleGrid({ modules }: { modules: ModuleInfo[] }) {
                 {Icon && <Icon className="h-6 w-6" />}
               </span>
               {!isActive && <span className="badge-neutral">Coming next</span>}
+              {module.badge ? (
+                <span className="badge-clay" aria-label={`${module.badge} ${module.badgeLabel ?? 'waiting'}`}>
+                  {module.badge} {module.badgeLabel ?? 'waiting'}
+                </span>
+              ) : null}
             </div>
 
             <h2 className="mt-3 text-xl font-semibold text-parchment">{module.title}</h2>

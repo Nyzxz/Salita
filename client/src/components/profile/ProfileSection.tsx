@@ -3,7 +3,7 @@ import { updateMyProfile } from '../../api/auth';
 import { ApiRequestError } from '../../api/client';
 import { useAuth } from '../../auth/AuthContext';
 import { gradeWithSection } from '../../lib/dates';
-import { AvatarPicker } from './AvatarPicker';
+import { AvatarUploader } from './AvatarUploader';
 import { Avatar } from '../common/Avatar';
 import { PageIntro } from '../ui/PageIntro';
 import { Notice } from '../ui/Notice';
@@ -49,7 +49,7 @@ export function ProfileSection() {
       />
 
       <div className="surface flex flex-wrap items-center gap-5 p-6">
-        <Avatar name={user.name} size="lg" accent="leaf" preset={user.avatar} />
+        <Avatar name={user.name} size="lg" accent="leaf" userId={user.id} avatarVersion={user.avatarVersion} />
         <div className="min-w-0">
           <p className="truncate text-xl font-semibold text-parchment">{user.name}</p>
           <p className="mt-1 text-sm text-muted">@{user.username}</p>
@@ -62,7 +62,7 @@ export function ProfileSection() {
 
       <div className="max-w-2xl">
         <div className="surface mb-6 p-6">
-          <AvatarPicker />
+          <AvatarUploader />
         </div>
         <form onSubmit={handleSave} className="surface flex flex-col gap-5 p-6" aria-labelledby="details-heading">
           <div>

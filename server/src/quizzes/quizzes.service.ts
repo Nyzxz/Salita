@@ -1,4 +1,7 @@
 import mongoose from 'mongoose';
+import { announcesNow, isLive, liveFilter, parsePublishing, publishingFlags } from '../publishing.js';
+import { DIFFICULTY_NAMES, isDifficulty, PASSING_PERCENT, QUIZ_DIFFICULTIES } from '../difficulty.js';
+import { LearningContent } from '../models/LearningContent.js';
 import type {
   ContentGrade,
   CreateQuizRequest,
@@ -6,6 +9,7 @@ import type {
   QuizReviewItem,
   QuizStartRecord,
   StudentProgressItem,
+  TierProgress,
   TeacherAnalytics,
   UpdateQuizRequest,
   QuizAttemptRecord,
@@ -31,7 +35,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 export function parseCreateQuizRequest(value: unknown): CreateQuizRequest | null {
   if (!isRecord(value)) return null;
-  const { title, description, timeLimitMinutes, questions, dueDate, randomize } = value;
+  const { title, description, timeLimitMinutes, questions, dueDate, randomize, difficulty } = value;
   const gradeLevel = parseContentGrade(value.gradeLevel);
   if (
     gradeLevel === null ||
@@ -47,14 +51,15 @@ export function parseCreateQuizRequest(value: unknown): CreateQuizRequest | null
     (timeLimitMinutes !== undefined &&
       (!Number.isInteger(timeLimitMinutes) || (timeLimitMinutes as number) < 1 || (timeLimitMinutes as number) > 600)) ||
     (dueDate !== undefined && dueDate !== null && (typeof dueDate !== 'string' || !Number.isFinite(Date.parse(dueDate)))) ||
-    (randomize !== undefined && typeof randomize !== 'boolean')
+    (randomize !== undefined && typeof randomize !== 'boolean') ||
+    (difficulty !== undefined && !isDifficulty(difficulty))
   ) {
     return null;
   }
 
   const parsedQuestions = questions.map((question) => {
     if (!isRecord(question)) return null;
-    const { questionText, options, correctAnswerIndex, points } = question;
+    const { questionText, options, correctAnswerIndex, points, explanation } = question;
     if (
       typeof questionText !== 'string' ||
       !questionText.trim() ||
@@ -68,7 +73,8 @@ export function parseCreateQuizRequest(value: unknown): CreateQuizRequest | null
       typeof points !== 'number' ||
       !Number.isInteger(points) ||
       points <= 0 ||
-      points > LIMITS.points
+      points > LIMITS.points ||
+      (explanation !== undefined && (typeof explanation !== 'string' || explanation.trim().length > 600))
     ) {
       return null;
     }
@@ -77,17 +83,23 @@ export function parseCreateQuizRequest(value: unknown): CreateQuizRequest | null
       options: options.map((option: string) => option.trim()),
       correctAnswerIndex: correctAnswerIndex as number,
       points,
+      ...(typeof explanation === 'string' && explanation.trim() ? { explanation: explanation.trim() } : {}),
     };
   });
   if (parsedQuestions.some((question) => question === null)) return null;
 
+  const publishing = parsePublishing(value);
+  if (!publishing) return null;
   return {
+    ...(publishing.isDraft ? { draft: true } : {}),
+    ...(publishing.publishAt ? { publishAt: publishing.publishAt.toISOString() } : {}),
     title: title.trim(),
     description: description.trim(),
     gradeLevel,
     ...(timeLimitMinutes === undefined ? {} : { timeLimitMinutes: timeLimitMinutes as number }),
     ...(typeof dueDate === 'string' ? { dueDate } : {}),
     randomize: randomize === true,
+    ...(isDifficulty(difficulty) ? { difficulty } : {}),
     questions: parsedQuestions as CreateQuizRequest['questions'],
   };
 }
@@ -108,27 +120,33 @@ function toQuizContent(
   timeLimitMinutes?: number | null;
   dueDate?: Date | null;
   randomize?: boolean;
+  difficulty?: string;
   gradeLevel?: string;
-  questions: Array<{ questionText: string; options: string[]; points: number; correctAnswerIndex?: number }>;
+  questions: Array<{ questionText: string; options: string[]; points: number; correctAnswerIndex?: number; explanation?: string }>;
   createdBy: unknown;
   createdAt: Date;
+  publishAt?: Date | null;
+  isDraft?: boolean;
   },
   withAnswers = false,
 ): QuizContent {
   return {
+    ...(withAnswers ? publishingFlags(quiz) : {}),
     id: String(quiz._id),
     title: quiz.title,
     description: quiz.description,
     ...(quiz.timeLimitMinutes ? { timeLimitMinutes: quiz.timeLimitMinutes } : {}),
     ...(quiz.dueDate ? { dueDate: quiz.dueDate.toISOString() } : {}),
     randomize: quiz.randomize === true,
+    ...(isDifficulty(quiz.difficulty) ? { difficulty: quiz.difficulty } : {}),
     gradeLevel: (quiz.gradeLevel ?? 'ALL') as ContentGrade,
     // Correct answers are deliberately left out of what students receive.
-    questions: quiz.questions.map(({ questionText, options, points, correctAnswerIndex }) => ({
+    questions: quiz.questions.map(({ questionText, options, points, correctAnswerIndex, explanation }) => ({
       questionText,
       options,
       points,
       ...(withAnswers && correctAnswerIndex !== undefined ? { correctAnswerIndex } : {}),
+      ...(withAnswers && explanation ? { explanation } : {}),
     })),
     createdBy: String(quiz.createdBy),
     createdAt: quiz.createdAt.toISOString(),
@@ -151,7 +169,7 @@ type AttemptLike = Pick<
 
 /** Builds the per-question review a student sees after finishing, from the snapshot saved with the attempt. */
 export function buildReview(
-  questions: ReadonlyArray<{ questionText: string; options: string[]; correctAnswerIndex: number; points: number }>,
+  questions: ReadonlyArray<{ questionText: string; options: string[]; correctAnswerIndex: number; points: number; explanation?: string }>,
   userAnswers: readonly number[],
 ): QuizReviewItem[] {
   return questions.map((question, index) => {
@@ -163,6 +181,7 @@ export function buildReview(
       userAnswer,
       points: question.points,
       earned: userAnswer === question.correctAnswerIndex ? question.points : 0,
+      ...(question.explanation ? { explanation: question.explanation } : {}),
     };
   });
 }
@@ -225,6 +244,9 @@ function quizFields(request: CreateQuizRequest) {
     timeLimitMinutes: request.timeLimitMinutes ?? null,
     dueDate: request.dueDate ? new Date(request.dueDate) : null,
     randomize: request.randomize === true,
+    ...(request.difficulty ? { difficulty: request.difficulty } : { difficulty: undefined }),
+    isDraft: request.draft === true,
+    publishAt: request.publishAt ? new Date(request.publishAt) : null,
     questions: request.questions,
   };
 }
@@ -232,17 +254,19 @@ function quizFields(request: CreateQuizRequest) {
 export async function createQuiz(user: User, request: CreateQuizRequest): Promise<QuizContent> {
   await connectDB();
   const quiz = await Quiz.create({ ...quizFields(request), createdBy: new mongoose.Types.ObjectId(user.id) });
-  await notifyStudentsOfGrade(request.gradeLevel, {
-    title: 'New quiz',
-    body: request.title,
-    link: '/dashboard/student#quizzes',
-  });
+  if (announcesNow({ isDraft: request.draft === true, publishAt: request.publishAt ? new Date(request.publishAt) : null })) {
+    await notifyStudentsOfGrade(request.gradeLevel, {
+      title: 'New quiz',
+      body: request.title,
+      link: '/dashboard/student#quizzes',
+    });
+  }
   return toQuizContent(quiz);
 }
 
 export async function listQuizzes(viewer?: User): Promise<QuizContent[]> {
   await connectDB();
-  const quizzes = await Quiz.find().sort({ createdAt: -1 }).limit(500).lean();
+  const quizzes = await Quiz.find(viewer?.role === 'STUDENT' ? liveFilter() : {}).sort({ createdAt: -1 }).limit(500).lean();
   const all = quizzes.map((quiz) => toQuizContent(quiz, viewer?.role === 'TEACHER'));
   if (!viewer || viewer.role !== 'STUDENT') return all;
 
@@ -280,13 +304,14 @@ const SUBMIT_GRACE_MS = 30_000;
 
 /** Why a student may not open or submit this quiz right now, or null if they may. */
 async function whyBlocked(
-  quiz: { _id: unknown; dueDate?: Date | null; gradeLevel?: string },
+  quiz: { _id: unknown; dueDate?: Date | null; gradeLevel?: string; publishAt?: Date | null; isDraft?: boolean },
   user: User,
   options: { checkDue: boolean; dueGraceMs?: number },
 ): Promise<{ status: number; error: string } | null> {
   if (!matchesGrade(quiz.gradeLevel ?? 'ALL', user.section)) {
     return { status: 403, error: 'This quiz is not assigned to your grade level.' };
   }
+  if (!isLive(quiz)) return { status: 404, error: 'Quiz not found.' };
   if (options.checkDue && quiz.dueDate && Date.now() > quiz.dueDate.getTime() + (options.dueGraceMs ?? 0)) {
     return { status: 400, error: 'This quiz is closed — its due date has passed.' };
   }
@@ -310,13 +335,21 @@ export async function startQuiz(user: User, quizId: string): Promise<QuizResult<
     return { ok: false, status: 400, error: 'You have already taken this quiz. Ask your teacher if you need a retake.' };
   }
 
-  const startedAt = new Date();
-  // Every (re)start resets the clock.
-  await QuizStart.updateOne({ quizId: quiz._id, studentId: user.id }, { $set: { startedAt } }, { upsert: true }).catch(
-    (error: unknown) => {
-      if (!(typeof error === 'object' && error !== null && 'code' in error && error.code === 11000)) throw error;
-    },
-  );
+  // Reopening a quiz that is still running (after a refresh, say) keeps its original clock,
+  // so refreshing the page can never buy extra time. A finished or expired start begins afresh.
+  const existing = await QuizStart.findOne({ quizId: quiz._id, studentId: user.id }).lean();
+  const stillRunning =
+    existing !== null &&
+    (!quiz.timeLimitMinutes || Date.now() < existing.startedAt.getTime() + quiz.timeLimitMinutes * 60_000);
+  let startedAt = stillRunning && existing ? existing.startedAt : new Date();
+  if (!stillRunning) {
+    await QuizStart.updateOne({ quizId: quiz._id, studentId: user.id }, { $set: { startedAt } }, { upsert: true }).catch(
+      (error: unknown) => {
+        if (!(typeof error === 'object' && error !== null && 'code' in error && error.code === 11000)) throw error;
+      },
+    );
+  }
+  startedAt = new Date(startedAt);
 
   return {
     ok: true,
@@ -379,11 +412,12 @@ export async function submitQuizAttempt(
     totalPossiblePoints,
     percentageScore,
     feedback,
-    questions: quiz.questions.map(({ questionText, options, correctAnswerIndex, points }) => ({
+    questions: quiz.questions.map(({ questionText, options, correctAnswerIndex, points, explanation }) => ({
       questionText,
       options,
       correctAnswerIndex,
       points,
+      ...(explanation ? { explanation } : {}),
     })),
     // Students always see where they went wrong once they are done.
     reviewable: true,
@@ -478,11 +512,18 @@ const round1 = (value: number): number => Math.round(value * 10) / 10;
 /** Class-level results: per-quiz averages with question-by-question item analysis, and per-student progress. */
 export async function getTeacherAnalytics(): Promise<TeacherAnalytics> {
   await connectDB();
-  const [attempts, students, graded] = await Promise.all([
+  const [attempts, students, graded, allQuizzes, allSubmissions, dueTasks] = await Promise.all([
     QuizAttempt.find().sort({ completedAt: -1 }).limit(5000).lean(),
-    UserModel.find({ role: 'STUDENT' }).select('fullName section').limit(2000).lean(),
+    UserModel.find({ role: 'STUDENT' }).select('fullName section classSection').limit(2000).lean(),
     Submission.find({ status: 'GRADED' }).select('taskId studentId grade').limit(10000).lean(),
+    Quiz.find().select('gradeLevel difficulty dueDate').lean(),
+    Submission.find().select('taskId studentId').limit(20000).lean(),
+    LearningContent.find({ type: { $in: ['ACTIVITY', 'PERFORMANCE_TASK'] }, dueDate: { $lt: new Date() } })
+      .select('gradeLevel')
+      .lean(),
   ]);
+  const nowMs = Date.now();
+  const submittedKeys = new Set(allSubmissions.map((submission) => `${submission.taskId}:${String(submission.studentId)}`));
 
   // --- per quiz
   const byQuiz = new Map<string, typeof attempts>();
@@ -525,9 +566,14 @@ export async function getTeacherAnalytics(): Promise<TeacherAnalytics> {
       }),
     });
   }
-  const quizMeta = await Quiz.find({ _id: { $in: [...byQuiz.keys()] } }).select('gradeLevel').lean();
+  const quizMeta = await Quiz.find({ _id: { $in: [...byQuiz.keys()] } }).select('gradeLevel difficulty').lean();
   const gradeByQuiz = new Map(quizMeta.map((quiz) => [String(quiz._id), quiz.gradeLevel ?? 'ALL']));
-  for (const item of quizzes) item.gradeLevel = gradeByQuiz.get(item.quizId) ?? 'ALL';
+  const diffByQuiz = new Map(quizMeta.map((quiz) => [String(quiz._id), quiz.difficulty]));
+  for (const item of quizzes) {
+    item.gradeLevel = gradeByQuiz.get(item.quizId) ?? 'ALL';
+    const d = diffByQuiz.get(item.quizId);
+    if (isDifficulty(d)) item.difficulty = d;
+  }
   quizzes.sort((a, b) => a.averagePercent - b.averagePercent);
 
   // --- per student
@@ -540,10 +586,45 @@ export async function getTeacherAnalytics(): Promise<TeacherAnalytics> {
     const id = String(student._id);
     const mine = attempts.filter((attempt) => String(attempt.studentId) === id);
     const work = graded.filter((submission) => String(submission.studentId) === id && totals.has(submission.taskId) && submission.grade !== undefined);
+    const section = student.section ?? '';
+    const bestByQuiz = new Map<string, number>();
+    const failsByQuiz = new Map<string, number>();
+    for (const attempt of mine) {
+      const key = String(attempt.quizId);
+      bestByQuiz.set(key, Math.max(bestByQuiz.get(key) ?? 0, attempt.percentageScore));
+      if (attempt.percentageScore < PASSING_PERCENT) failsByQuiz.set(key, (failsByQuiz.get(key) ?? 0) + 1);
+    }
+    const tiers: TierProgress[] = QUIZ_DIFFICULTIES.map((difficulty) => {
+      const inTier = allQuizzes.filter((quiz) => quiz.difficulty === difficulty && matchesGrade(quiz.gradeLevel, section));
+      const attempted = inTier.filter((quiz) => bestByQuiz.has(String(quiz._id))).length;
+      const passed = inTier.filter((quiz) => (bestByQuiz.get(String(quiz._id)) ?? -1) >= PASSING_PERCENT).length;
+      return {
+        difficulty,
+        total: inTier.length,
+        passed,
+        attempted,
+        status: inTier.length > 0 && passed === inTier.length ? 'PASSED' : attempted > 0 ? 'IN_PROGRESS' : 'NOT_STARTED',
+      };
+    });
+    const atRisk: string[] = [];
+    for (const difficulty of QUIZ_DIFFICULTIES) {
+      const failed = allQuizzes
+        .filter((quiz) => quiz.difficulty === difficulty && matchesGrade(quiz.gradeLevel, section))
+        .reduce((sum, quiz) => sum + (failsByQuiz.get(String(quiz._id)) ?? 0) * ((bestByQuiz.get(String(quiz._id)) ?? 100) < PASSING_PERCENT ? 1 : 0), 0);
+      if (failed >= 2) atRisk.push(`Failed ${DIFFICULTY_NAMES[difficulty]} quizzes ${failed} times without passing`);
+    }
+    const missedQuizzes = allQuizzes.filter(
+      (quiz) => quiz.dueDate && quiz.dueDate.getTime() < nowMs && matchesGrade(quiz.gradeLevel, section) && !bestByQuiz.has(String(quiz._id)),
+    ).length;
+    const missedTasks = dueTasks.filter((task) => matchesGrade(task.gradeLevel, section) && !submittedKeys.has(`${String(task._id)}:${id}`)).length;
+    if (missedQuizzes + missedTasks >= 2) atRisk.push(`Missed ${missedQuizzes + missedTasks} deadlines`);
     return {
       studentId: id,
       studentName: student.fullName,
-      section: student.section ?? '',
+      section,
+      ...(student.classSection ? { classSection: student.classSection } : {}),
+      tiers,
+      atRisk,
       quizzesTaken: new Set(mine.map((attempt) => String(attempt.quizId))).size,
       quizAveragePercent: mine.length ? round1(mine.reduce((sum, attempt) => sum + attempt.percentageScore, 0) / mine.length) : null,
       tasksGraded: work.length,

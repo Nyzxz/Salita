@@ -1,5 +1,7 @@
 import type {
   ActivityTask,
+  BulkContentRequest,
+  BulkContentResult,
   CreateActivityTaskRequest,
   CreateLectureRequest,
   LectureRecord,
@@ -38,4 +40,8 @@ export function updateActivityTask(
 
 export function deleteActivityTask(id: string): Promise<{ id: string }> {
   return apiDelete<{ id: string }>(`/api/content/tasks/${encodeURIComponent(id)}`);
+}
+
+export function bulkContent(request: BulkContentRequest): Promise<BulkContentResult> {
+  return apiPost<BulkContentResult>('/api/content/bulk', request);
 }

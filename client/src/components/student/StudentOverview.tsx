@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react';
 import type { QuizAttemptRecord, QuizContent } from '@shared/types';
 import { fetchMyQuizAttempts, fetchQuizzes } from '../../api/quizzes';
+import { formatDateTime, timeUntil } from '../../lib/dates';
 import { onLive } from '../../lib/live';
 import type { useTasksAndSubmissions } from '../../hooks/useTasksAndSubmissions';
 import { PageIntro } from '../ui/PageIntro';
 import { BookIcon, ChartIcon, ClipboardCheckIcon, QuizIcon, TargetIcon } from '../common/icons';
+import { AchievementsPanel } from './AchievementsPanel';
 import type { StudentTab } from './StudentSidebar';
 
 interface StudentOverviewProps {
@@ -51,6 +53,24 @@ export function StudentOverview({ name, learning, onOpen }: StudentOverviewProps
   const latestFeedback = submissions
     .filter((submission) => submission.status === 'GRADED' && submission.feedback)
     .sort((a, b) => b.submittedAt.localeCompare(a.submittedAt))[0];
+  // Everything still to do that has a deadline, soonest first (overdue work has its own banner).
+  const dueNext = [
+    ...tasks
+      .filter((task) => !submitted.has(task.id) && new Date(task.dueDate).getTime() >= now)
+      .map((task) => ({
+        key: `task-${task.id}`,
+        title: task.title,
+        due: task.dueDate,
+        verb: 'due',
+        kind: task.type === 'ACTIVITY' ? 'Activity' : 'Performance task',
+        tab: (task.type === 'ACTIVITY' ? 'activities' : 'performance') as StudentTab,
+      })),
+    ...(quizzes ?? [])
+      .filter((quiz) => quiz.dueDate && (!tookQuiz.has(quiz.id) || quiz.retakeOpen) && new Date(quiz.dueDate).getTime() >= now)
+      .map((quiz) => ({ key: `quiz-${quiz.id}`, title: quiz.title, due: quiz.dueDate as string, verb: 'closes', kind: 'Quiz', tab: 'quizzes' as StudentTab })),
+  ]
+    .sort((a, b) => a.due.localeCompare(b.due))
+    .slice(0, 6);
   const feedbackTask = latestFeedback ? tasks.find((task) => task.id === latestFeedback.taskId) : undefined;
 
   const cards: { tab: StudentTab; label: string; value: number | string; hint: string; icon: typeof BookIcon }[] = [
@@ -77,6 +97,32 @@ export function StudentOverview({ name, learning, onOpen }: StudentOverviewProps
           </p>
         </div>
       )}
+      <AchievementsPanel />
+
+      <section aria-labelledby="due-next-heading" className="surface p-5">
+        <h3 id="due-next-heading" className="text-lg font-semibold text-parchment">Due next</h3>
+        {dueNext.length === 0 ? (
+          <p className="mt-2 text-sm text-muted">Nothing with a deadline right now. Nice work!</p>
+        ) : (
+          <ul className="mt-3 flex flex-col divide-y divide-night-border">
+            {dueNext.map((item) => {
+              const until = timeUntil(item.due, now);
+              const chip = until.urgency === 'soon' ? 'badge-clay' : until.urgency === 'week' ? 'badge-gold' : 'badge-neutral';
+              return (
+                <li key={item.key}>
+                  <button type="button" onClick={() => onOpen(item.tab)} className="flex w-full items-center justify-between gap-3 py-3 text-left transition hover:bg-white/[0.03]">
+                    <span className="min-w-0">
+                      <span className="block truncate text-sm font-medium text-parchment">{item.title}</span>
+                      <span className="block text-xs text-muted">{item.kind} · {formatDateTime(item.due)}</span>
+                    </span>
+                    <span className={`${chip} flex-none`}>{item.verb} {until.label}</span>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </section>
       <ul className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {cards.map(({ tab, label, value, hint, icon: Icon }) => (
           <li key={tab}>
