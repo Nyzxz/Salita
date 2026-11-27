@@ -59,7 +59,7 @@ export function StudentDashboard() {
         onSignOut={handleSignOut}
       />
 
-      <div className="mx-auto grid w-full max-w-[1400px] 2xl:max-w-[1760px] flex-1 gap-6 px-4 py-8 sm:px-6 lg:grid-cols-[220px_minmax(0,1fr)] lg:gap-10 lg:py-10 xl:px-8">
+      <div className="mx-auto grid w-full grid-cols-[minmax(0,1fr)] max-w-[1400px] 2xl:max-w-[1760px] flex-1 gap-6 px-4 py-8 sm:px-6 lg:grid-cols-[220px_minmax(0,1fr)] lg:gap-10 lg:py-10 xl:px-8">
         <StudentSidebar activeTab={activeTab} onChangeTab={changeTab} />
         <main className="min-w-0">
         <div key={activeTab} className="animate-fade-in-up">

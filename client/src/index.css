@@ -11,7 +11,7 @@
     -webkit-text-size-adjust: 100%;
   }
   body {
-    @apply bg-night font-body text-parchment antialiased;
+    @apply bg-night font-body text-parchment antialiased overflow-x-clip;
     background-image:
       radial-gradient(1100px 520px at 85% -10%, rgba(232, 169, 60, 0.07), transparent 60%),
       radial-gradient(900px 480px at -10% 0%, rgba(76, 154, 106, 0.05), transparent 55%);
