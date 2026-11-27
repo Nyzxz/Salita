@@ -15,7 +15,7 @@ export interface ModuleInfo {
 
 export function ModuleGrid({ modules }: { modules: ModuleInfo[] }) {
   return (
-    <ul className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">
+    <ul className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-[repeat(auto-fit,minmax(260px,1fr))]">
       {modules.map((module, index) => {
         const Icon = module.icon;
         const isActive = Boolean(module.href);

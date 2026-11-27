@@ -33,7 +33,7 @@ export function DashboardShell({ title, subtitle, eyebrow = 'Teacher workspace',
   return (
     <div className="flex min-h-screen flex-col">
       <header className="glass sticky top-0 z-30 border-b border-night-border">
-        <div className="mx-auto flex h-16 max-w-[1280px] items-center justify-between gap-4 px-4 sm:px-6 xl:px-8">
+        <div className="mx-auto flex h-16 max-w-[1280px] 2xl:max-w-[1680px] items-center justify-between gap-4 px-4 sm:px-6 xl:px-8">
           <Brand to="/dashboard/admin" />
 
           <div className="flex items-center gap-3">
@@ -70,7 +70,7 @@ export function DashboardShell({ title, subtitle, eyebrow = 'Teacher workspace',
       </header>
 
       <div className="aurora-backdrop grid-dots relative overflow-hidden border-b border-night-border">
-        <div className="relative z-10 mx-auto max-w-[1280px] px-4 py-10 sm:px-6 sm:py-12 xl:px-8">
+        <div className="relative z-10 mx-auto max-w-[1280px] 2xl:max-w-[1680px] px-4 py-10 sm:px-6 sm:py-12 xl:px-8">
           <div className="max-w-2xl">
             <p className="eyebrow animate-fade-in-up">{eyebrow}</p>
             <h1 className="animate-fade-in-up mt-2 text-3xl font-semibold text-parchment sm:text-4xl">{title}</h1>
@@ -80,7 +80,7 @@ export function DashboardShell({ title, subtitle, eyebrow = 'Teacher workspace',
         </div>
       </div>
 
-      <main className="mx-auto w-full max-w-[1280px] flex-1 px-4 py-10 sm:px-6 xl:px-8">
+      <main className="mx-auto w-full max-w-[1280px] 2xl:max-w-[1680px] flex-1 px-4 py-10 sm:px-6 xl:px-8">
         <div className="animate-fade-in">{children}</div>
       </main>
 
