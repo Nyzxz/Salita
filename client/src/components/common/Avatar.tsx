@@ -8,6 +8,8 @@ interface AvatarProps {
   /** Pass both to show the person's uploaded picture instead of initials. */
   userId?: string;
   avatarVersion?: number;
+  /** A picture to show right now (e.g. just chosen), ahead of the saved one. */
+  previewSrc?: string | null;
 }
 
 const SIZE_CLASSES = {
@@ -25,10 +27,14 @@ function initialsFor(name: string): string {
 }
 
 /** A profile picture when there is one, otherwise initials in a ringed circle. */
-export function Avatar({ name, size = 'md', accent = 'gold', userId, avatarVersion }: AvatarProps) {
+export function Avatar({ name, size = 'md', accent = 'gold', userId, avatarVersion, previewSrc }: AvatarProps) {
   const [failedVersion, setFailedVersion] = useState<number | null>(null);
   const tone = accent === 'gold' ? 'from-gold-soft to-gold text-night' : 'from-leaf to-[#6fbf8e] text-night';
   const showPhoto = Boolean(userId && avatarVersion && failedVersion !== avatarVersion);
+
+  if (previewSrc) {
+    return <img src={previewSrc} alt="" className={`flex-none rounded-full object-cover ring-2 ring-white/10 ${SIZE_CLASSES[size]}`} />;
+  }
 
   if (showPhoto && userId && avatarVersion) {
     return (

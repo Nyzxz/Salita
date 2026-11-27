@@ -1,6 +1,6 @@
 /** Shrinks a chosen photo to a centred square JPEG and returns it as base64 (no data: prefix). */
 export async function squareJpegBase64(file: File, size = 256): Promise<string> {
-  if (!/^image\/(jpeg|png|webp)$/.test(file.type)) throw new Error('Use a JPG or PNG picture.');
+  if (!/^image\/(jpeg|png)$/.test(file.type)) throw new Error('Use a JPG or PNG picture.');
   const url = URL.createObjectURL(file);
   try {
     const image = await new Promise<HTMLImageElement>((resolve, reject) => {

@@ -47,7 +47,8 @@ export async function readAvatar(viewer: User, userId: string): Promise<AvatarRe
   if (!mongoose.isValidObjectId(userId)) return { ok: false, status: 404, error: 'No picture.' };
   if (viewer.id !== userId && viewer.role !== 'TEACHER') return { ok: false, status: 403, error: 'Your account is not allowed to do that.' };
   await connectDB();
-  const image = await ProfileImage.findOne({ userId }).lean();
+  // Read as a document (not .lean()): lean() hands back a BSON Binary wrapper, which does not copy into a Buffer correctly.
+  const image = await ProfileImage.findOne({ userId });
   if (!image) return { ok: false, status: 404, error: 'No picture.' };
-  return { ok: true, data: { contentType: image.contentType, data: Buffer.from(image.data as unknown as Buffer) } };
+  return { ok: true, data: { contentType: image.contentType, data: Buffer.from(image.data) } };
 }

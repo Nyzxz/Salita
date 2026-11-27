@@ -4,7 +4,6 @@ import { ApiRequestError } from '../../api/client';
 import { useAuth } from '../../auth/AuthContext';
 import { gradeWithSection } from '../../lib/dates';
 import { AvatarUploader } from './AvatarUploader';
-import { Avatar } from '../common/Avatar';
 import { PageIntro } from '../ui/PageIntro';
 import { Notice } from '../ui/Notice';
 
@@ -49,11 +48,10 @@ export function ProfileSection() {
       />
 
       <div className="surface flex flex-wrap items-center gap-5 p-6">
-        <Avatar name={user.name} size="lg" accent="leaf" userId={user.id} avatarVersion={user.avatarVersion} />
-        <div className="min-w-0">
+        <AvatarUploader>
           <p className="truncate text-xl font-semibold text-parchment">{user.name}</p>
           <p className="mt-1 text-sm text-muted">@{user.username}</p>
-        </div>
+        </AvatarUploader>
         <div className="ml-auto flex flex-wrap gap-2">
           <span className="badge-leaf">Student</span>
           {user.section && <span className="badge-gold">{gradeWithSection(user.section, user.classSection)}</span>}
@@ -61,9 +59,6 @@ export function ProfileSection() {
       </div>
 
       <div className="max-w-2xl">
-        <div className="surface mb-6 p-6">
-          <AvatarUploader />
-        </div>
         <form onSubmit={handleSave} className="surface flex flex-col gap-5 p-6" aria-labelledby="details-heading">
           <div>
             <h3 id="details-heading" className="text-lg font-semibold text-parchment">Personal details</h3>

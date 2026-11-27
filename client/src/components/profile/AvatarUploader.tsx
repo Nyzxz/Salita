@@ -1,4 +1,4 @@
-import { useRef, useState, type ChangeEvent } from 'react';
+import { useRef, useState, type ChangeEvent, type ReactNode } from 'react';
 import { deleteAvatar, uploadAvatar } from '../../api/auth';
 import { ApiRequestError } from '../../api/client';
 import { useAuth } from '../../auth/AuthContext';
@@ -7,11 +7,12 @@ import { Avatar } from '../common/Avatar';
 import { CameraIcon } from '../common/icons';
 
 /** Big profile picture with a camera button to choose a new one, and an option to remove it. */
-export function AvatarUploader({ accent = 'leaf' }: { accent?: 'gold' | 'leaf' }) {
+export function AvatarUploader({ accent = 'leaf', children }: { accent?: 'gold' | 'leaf'; children?: ReactNode }) {
   const { session, updateUser } = useAuth();
   const inputRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [preview, setPreview] = useState<string | null>(null);
   const user = session?.user;
   if (!user) return null;
 
@@ -22,8 +23,12 @@ export function AvatarUploader({ accent = 'leaf' }: { accent?: 'gold' | 'leaf' }
     setError(null);
     setBusy(true);
     try {
-      updateUser(await uploadAvatar(await squareJpegBase64(file)));
+      const base64 = await squareJpegBase64(file);
+      // Show the new picture straight away; the saved copy takes over once the server confirms.
+      setPreview(`data:image/jpeg;base64,${base64}`);
+      updateUser(await uploadAvatar(base64));
     } catch (err) {
+      setPreview(null);
       setError(err instanceof ApiRequestError || err instanceof Error ? err.message : 'Could not save your picture.');
     } finally {
       setBusy(false);
@@ -35,6 +40,7 @@ export function AvatarUploader({ accent = 'leaf' }: { accent?: 'gold' | 'leaf' }
     setBusy(true);
     try {
       updateUser(await deleteAvatar());
+      setPreview(null);
     } catch (err) {
       setError(err instanceof ApiRequestError ? err.message : 'Could not remove your picture.');
     } finally {
@@ -45,7 +51,7 @@ export function AvatarUploader({ accent = 'leaf' }: { accent?: 'gold' | 'leaf' }
   return (
     <div className="flex items-center gap-5">
       <div className="relative">
-        <Avatar name={user.name} size="xl" accent={accent} userId={user.id} avatarVersion={user.avatarVersion} />
+        <Avatar name={user.name} size="xl" accent={accent} userId={user.id} avatarVersion={user.avatarVersion} previewSrc={preview} />
         <button
           type="button"
           onClick={() => inputRef.current?.click()}
@@ -55,10 +61,11 @@ export function AvatarUploader({ accent = 'leaf' }: { accent?: 'gold' | 'leaf' }
         >
           <CameraIcon className="h-4 w-4" />
         </button>
-        <input ref={inputRef} type="file" accept="image/png,image/jpeg,image/webp" className="sr-only" onChange={(event) => void handleFile(event)} />
+        <input ref={inputRef} type="file" accept=".jpg,.jpeg,.png,image/jpeg,image/png" className="sr-only" onChange={(event) => void handleFile(event)} />
       </div>
-      <div className="min-w-0">
-        <p className="text-sm font-medium text-parchment">Profile picture</p>
+      <div className="min-w-0 flex-1">
+        {children}
+        {!children && <p className="text-sm font-medium text-parchment">Profile picture</p>}
         <p className="mt-0.5 text-xs text-muted">{busy ? 'Saving…' : 'JPG or PNG. It is cropped to a square.'}</p>
         {user.avatarVersion ? (
           <button type="button" onClick={() => void handleRemove()} disabled={busy} className="mt-1 text-xs text-clay hover:underline">
