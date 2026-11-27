@@ -3,8 +3,8 @@ import { useEffect, useRef, useState } from 'react';
 import { Avatar } from '../common/Avatar';
 import { NotificationBell } from '../common/NotificationBell';
 import { Brand } from '../common/Brand';
-import { LogOutIcon, UserIcon } from '../common/icons';
-import type { StudentTab } from './StudentSidebar';
+import { CloseIcon, LogOutIcon, MenuIcon, UserIcon } from '../common/icons';
+import { SIDEBAR_TABS, type StudentTab } from './StudentSidebar';
 
 interface StudentTopNavProps {
   activeTab: StudentTab;
@@ -17,6 +17,7 @@ interface StudentTopNavProps {
 export function StudentTopNav({ activeTab, onChangeTab, studentName, onSignOut }: StudentTopNavProps) {
   const { session } = useAuth();
   const [open, setOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -38,7 +39,19 @@ export function StudentTopNav({ activeTab, onChangeTab, studentName, onSignOut }
   return (
     <header className="glass sticky top-0 z-30 border-b border-night-border">
       <div className="mx-auto flex h-16 max-w-[1400px] 2xl:max-w-[1760px] items-center justify-between gap-4 px-4 sm:px-6 xl:px-8">
-        <Brand to="/dashboard/student" />
+        <div className="flex min-w-0 items-center gap-2">
+          <button
+            type="button"
+            className="-ml-1 rounded-lg p-2 text-parchment transition hover:bg-white/5 lg:hidden"
+            aria-label={menuOpen ? 'Close menu' : 'Open menu'}
+            aria-expanded={menuOpen}
+            aria-controls="student-mobile-menu"
+            onClick={() => setMenuOpen((value) => !value)}
+          >
+            {menuOpen ? <CloseIcon className="h-5 w-5" /> : <MenuIcon className="h-5 w-5" />}
+          </button>
+          <Brand to="/dashboard/student" />
+        </div>
 
         <div className="flex items-center gap-3">
           <NotificationBell />
@@ -84,6 +97,29 @@ export function StudentTopNav({ activeTab, onChangeTab, studentName, onSignOut }
           </div>
         </div>
       </div>
+      {menuOpen && (
+        <nav id="student-mobile-menu" aria-label="Dashboard sections" className="border-t border-night-border px-4 py-3 lg:hidden">
+          <ul className="mx-auto flex max-w-md flex-col gap-1">
+            {[...SIDEBAR_TABS, { id: 'profile' as StudentTab, label: 'Profile management', icon: UserIcon }].map((tab) => {
+              const Icon = tab.icon;
+              const isActive = tab.id === activeTab;
+              return (
+                <li key={tab.id}>
+                  <button
+                    type="button"
+                    aria-current={isActive ? 'page' : undefined}
+                    onClick={() => { setMenuOpen(false); onChangeTab(tab.id); }}
+                    className={`flex w-full items-center gap-3 rounded-xl border px-3.5 py-3 text-left text-sm font-medium transition ${isActive ? 'border-gold/40 bg-gold/10 text-parchment' : 'border-transparent text-muted hover:bg-white/5 hover:text-parchment'}`}
+                  >
+                    <Icon className={`h-4 w-4 ${isActive ? 'text-gold' : ''}`} />
+                    {tab.label}
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </nav>
+      )}
     </header>
   );
 }

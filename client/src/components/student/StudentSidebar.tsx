@@ -18,10 +18,10 @@ interface StudentSidebarProps {
   onChangeTab: (tab: StudentTab) => void;
 }
 
-/** Left menu on desktop, a scrolling strip on phones. Each button opens only its own section. */
+/** Left menu on desktop. On phones the same links live in the hamburger menu in the top bar. Each button opens only its own section. */
 export function StudentSidebar({ activeTab, onChangeTab }: StudentSidebarProps) {
   return (
-    <nav aria-label="Dashboard sections" className="min-w-0 lg:sticky lg:top-24 lg:self-start">
+    <nav aria-label="Dashboard sections" className="hidden min-w-0 lg:block lg:sticky lg:top-24 lg:self-start">
       <ul className="flex gap-1 overflow-x-auto pb-2 lg:flex-col lg:overflow-visible lg:pb-0">
         {SIDEBAR_TABS.map((tab) => {
           const isActive = tab.id === activeTab;
