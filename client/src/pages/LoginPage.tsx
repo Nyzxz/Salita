@@ -58,13 +58,13 @@ export function LoginPage() {
   const inputClasses = 'field pl-10';
 
   return (
-    <div className="grid min-h-screen grid-cols-1 lg:grid-cols-[1.15fr_1fr]">
-      <aside className="aurora-backdrop grid-dots relative hidden overflow-hidden border-r border-night-border bg-night-deep lg:flex lg:flex-col lg:justify-between lg:p-14">
+    <div className="grid min-h-[100dvh] grid-cols-1 lg:grid-cols-[1.15fr_1fr]">
+      <aside className="aurora-backdrop grid-dots relative hidden overflow-hidden border-r border-night-border bg-night-deep lg:flex lg:flex-col lg:justify-between lg:p-10 xl:p-14 2xl:p-20">
         <Brand className="relative z-10" />
 
-        <div className="relative z-10 max-w-lg animate-fade-in-up">
+        <div className="relative z-10 max-w-lg animate-fade-in-up 2xl:max-w-2xl">
           <p className="eyebrow">Filipino language &amp; culture</p>
-          <h2 className="mt-4 text-5xl font-semibold leading-[1.1] text-parchment">
+          <h2 className="mt-4 text-4xl font-semibold leading-[1.1] text-parchment xl:text-5xl 2xl:text-6xl">
             Learn the words.
             <br />
             <span className="text-gradient-gold">Discover the stories.</span>
@@ -96,14 +96,14 @@ export function LoginPage() {
         <p className="relative z-10 text-xs text-muted">Mabuhay! Six centuries of trade, colonization, and slang — one word at a time.</p>
       </aside>
 
-      <main className="flex min-h-screen flex-col items-center justify-center px-5 py-12 sm:px-8">
-        <div className="mb-8 lg:hidden">
+      <main className="flex min-h-[100dvh] flex-col items-center justify-center px-5 py-8 sm:px-8 sm:py-12">
+        <div className="mb-6 lg:hidden">
           <Brand />
         </div>
 
-        <div className="w-full max-w-[26rem] animate-scale-in">
-          <div className="mb-7">
-            <h1 className="text-3xl font-semibold text-parchment">Welcome back</h1>
+        <div className="w-full max-w-[26rem] animate-scale-in 2xl:max-w-[28rem]">
+          <div className="mb-5 sm:mb-7">
+            <h1 className="text-2xl sm:text-3xl font-semibold text-parchment">Welcome back</h1>
             <p className="mt-2 text-sm text-muted">Sign in to continue to your Salita workspace.</p>
           </div>
 
@@ -201,6 +201,12 @@ export function LoginPage() {
               </button>
             </form>
           </div>
+
+          <ul className="mt-6 flex flex-wrap justify-center gap-2 text-xs text-muted lg:hidden" aria-label="What Salita offers">
+            {['Lectures with etymology', 'Scored quizzes', 'Grades & feedback'].map((item) => (
+              <li key={item} className="rounded-full border border-night-border px-3 py-1">{item}</li>
+            ))}
+          </ul>
 
           <p className="mt-6 text-center text-xs leading-relaxed text-muted">
             Accounts are created by your teacher. Trouble signing in? Ask your teacher to reset your password.

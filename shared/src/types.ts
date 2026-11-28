@@ -125,6 +125,8 @@ export interface QuizContent extends PublishingFields {
   randomize: boolean;
   /** How hard the quiz is. Quizzes made before tiers existed have none. */
   difficulty?: QuizDifficulty;
+  /** Game mode: answering within this many seconds earns a speed bonus (XP only; never changes the score). */
+  questionSeconds?: number;
   /** Set for a student when their teacher has unlocked a retake for them. */
   retakeOpen?: boolean;
   gradeLevel: ContentGrade;
@@ -141,6 +143,7 @@ export interface CreateQuizRequest extends PublishingFields {
   dueDate?: string;
   randomize?: boolean;
   difficulty?: QuizDifficulty;
+  questionSeconds?: number;
   questions: Array<QuizContentQuestion & { correctAnswerIndex: number }>;
 }
 

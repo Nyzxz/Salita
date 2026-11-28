@@ -36,6 +36,7 @@ import { BackLink } from '../../components/layout/BackLink';
 import { BookIcon, EditIcon, PlusIcon, QuizIcon, TargetIcon, TrashIcon } from '../../components/common/icons';
 import { LIMITS } from '../../lib/limits';
 import { Field } from './studioField';
+import { RichTextEditor } from '../../components/ui/RichTextEditor';
 import { PublishControls, usePublishing } from './studioParts';
 import { QuestionBankPanel } from './QuestionBankPanel';
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog';
@@ -310,6 +311,7 @@ function QuizBuilder() {
   const [dueDate, setDueDate] = useState('');
   const [randomize, setRandomize] = useState(true);
   const [difficulty, setDifficulty] = useState<QuizDifficulty | ''>('');
+  const [questionSeconds, setQuestionSeconds] = useState('');
   const [gradeLevel, setGradeLevel] = useState<ContentGrade | ''>('');
   const [questions, setQuestions] = useState<DraftQuestion[]>([emptyQuestion()]);
   const [isSaving, setIsSaving] = useState(false);
@@ -337,6 +339,7 @@ function QuizBuilder() {
     setRandomize(true);
     setGradeLevel('');
     setDifficulty('');
+    setQuestionSeconds('');
     publishing.reset();
     setQuestions([emptyQuestion()]);
   };
@@ -353,6 +356,7 @@ function QuizBuilder() {
     setDueDate(toLocalInput(quiz.dueDate));
     setRandomize(quiz.randomize);
     setDifficulty(quiz.difficulty ?? '');
+    setQuestionSeconds(quiz.questionSeconds ? String(quiz.questionSeconds) : '');
     publishing.load(quiz);
     setGradeLevel(quiz.gradeLevel);
     setQuestions(
@@ -440,6 +444,7 @@ function QuizBuilder() {
         ...(dueDate ? { dueDate: new Date(dueDate).toISOString() } : {}),
         randomize,
         ...(difficulty ? { difficulty } : {}),
+        ...(questionSeconds ? { questionSeconds: Number(questionSeconds) } : {}),
         questions,
       };
       const saved = editingId ? await updateQuiz(editingId, payload) : await createQuiz(payload);
@@ -478,6 +483,9 @@ function QuizBuilder() {
               <GradeSelect value={gradeLevel} onChange={setGradeLevel} />
               <Field label="Time limit (minutes, optional)">
                 <input type="number" min={1} max={600} value={timeLimit} onChange={(event) => setTimeLimit(event.target.value)} className="field" />
+              </Field>
+              <Field label="Speed bonus per question (optional, seconds)">
+                <input type="number" min={5} max={120} step={1} value={questionSeconds} onChange={(event) => setQuestionSeconds(event.target.value)} className="field" placeholder="e.g. 20 — students earn bonus XP for answering fast" />
               </Field>
               <Field label="Difficulty (optional)">
                 <select value={difficulty} onChange={(event) => setDifficulty(event.target.value as QuizDifficulty | '')} className="field">
@@ -687,7 +695,7 @@ function LectureBuilder() {
         <Field label="English translation"><input maxLength={LIMITS.short} required value={translation} onChange={(event) => setTranslation(event.target.value)} className="field" /></Field>
         <Field label="Phonetic guide"><input maxLength={LIMITS.short} required value={phonetic} onChange={(event) => setPhonetic(event.target.value)} className="field" /></Field>
         <Field label="Category"><select value={category} onChange={(event) => setCategory(event.target.value as Category)} className="field">{VALID_CATEGORIES.map((item) => <option key={item} value={item}>{item[0].toUpperCase() + item.slice(1)}</option>)}</select></Field>
-        <Field label="Historical & cultural etymology note" className="sm:col-span-2"><textarea maxLength={LIMITS.long} required rows={4} value={historicalContext} onChange={(event) => setHistoricalContext(event.target.value)} className="field" /></Field>
+        <Field label="Historical & cultural story (students see it as short story cards — about two sentences per card; leave a blank line to start a new card)" className="sm:col-span-2"><textarea maxLength={LIMITS.long} required rows={4} value={historicalContext} onChange={(event) => setHistoricalContext(event.target.value)} className="field" /></Field>
         <Field label="Origin tag" className="sm:col-span-2"><input maxLength={LIMITS.short} value={etymologyOrigin} onChange={(event) => setEtymologyOrigin(event.target.value)} className="field" placeholder="Optional, e.g. Sanskrit" /></Field>
         <div className="sm:col-span-2"><PublishControls state={publishing} /></div>
         {error && <Notice tone="error" className="sm:col-span-2">{error}</Notice>}
@@ -806,7 +814,7 @@ function ActivityTaskBuilder() {
         <Field label="Type"><select disabled={editingId !== null} value={type} onChange={(event) => setType(event.target.value as TaskType)} className="field"><option value="ACTIVITY">Activity</option><option value="PERFORMANCE_TASK">Performance task</option></select></Field>
         <GradeSelect value={gradeLevel} onChange={setGradeLevel} className="sm:col-span-2" />
         <Field label={criteria.length > 0 ? 'Total points (sum of the rubric)' : 'Total points'}><input type="number" min={1} step={1} required readOnly={criteria.length > 0} value={criteria.length > 0 ? rubricTotal : totalPoints} onChange={(event) => setTotalPoints(Number(event.target.value))} className="field" /></Field>
-        <Field label="Detailed instructions / prompt" className="sm:col-span-2"><textarea maxLength={LIMITS.long} required rows={5} value={description} onChange={(event) => setDescription(event.target.value)} className="field" /></Field>
+        <Field label="Detailed instructions / prompt" className="sm:col-span-2"><RichTextEditor maxLength={LIMITS.long} required rows={10} value={description} onChange={setDescription} /></Field>
         <Field label={`Due date (${timeZoneName()} time)`}><input type="datetime-local" required value={dueDate} onChange={(event) => setDueDate(event.target.value)} className="field" /></Field>
         <fieldset className="flex flex-col gap-3 rounded-xl border border-night-border p-4 sm:col-span-2">
           <legend className="field-label px-1">Rubric (optional)</legend>

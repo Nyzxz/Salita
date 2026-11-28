@@ -6,6 +6,7 @@ import { downloadAttachment, uploadAttachment } from '../../api/tasks';
 import { saveBlob } from '../../api/client';
 import { LIMITS } from '../../lib/limits';
 import { Notice } from '../ui/Notice';
+import { RichText } from '../../lib/richText';
 import { AttachmentAudio } from '../common/AttachmentAudio';
 import { VoiceRecorder } from './VoiceRecorder';
 import { gradeLabel } from '../ui/GradeSelect';
@@ -128,7 +129,7 @@ export function TaskCard({ task, submission, onSubmit }: TaskCardProps) {
         </div>
       </div>
 
-      <p className="text-sm leading-relaxed text-muted">{task.description}</p>
+      <RichText text={task.description} />
 
       {task.rubric && task.rubric.length > 0 && (
         <div className="rounded-xl border border-night-border p-4">

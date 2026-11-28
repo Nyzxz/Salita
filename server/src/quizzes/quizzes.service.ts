@@ -35,7 +35,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 export function parseCreateQuizRequest(value: unknown): CreateQuizRequest | null {
   if (!isRecord(value)) return null;
-  const { title, description, timeLimitMinutes, questions, dueDate, randomize, difficulty } = value;
+  const { title, description, timeLimitMinutes, questions, dueDate, randomize, difficulty, questionSeconds } = value;
   const gradeLevel = parseContentGrade(value.gradeLevel);
   if (
     gradeLevel === null ||
@@ -52,7 +52,8 @@ export function parseCreateQuizRequest(value: unknown): CreateQuizRequest | null
       (!Number.isInteger(timeLimitMinutes) || (timeLimitMinutes as number) < 1 || (timeLimitMinutes as number) > 600)) ||
     (dueDate !== undefined && dueDate !== null && (typeof dueDate !== 'string' || !Number.isFinite(Date.parse(dueDate)))) ||
     (randomize !== undefined && typeof randomize !== 'boolean') ||
-    (difficulty !== undefined && !isDifficulty(difficulty))
+    (difficulty !== undefined && !isDifficulty(difficulty)) ||
+    (questionSeconds !== undefined && (typeof questionSeconds !== 'number' || !Number.isInteger(questionSeconds) || questionSeconds < 5 || questionSeconds > 120))
   ) {
     return null;
   }
@@ -100,6 +101,7 @@ export function parseCreateQuizRequest(value: unknown): CreateQuizRequest | null
     ...(typeof dueDate === 'string' ? { dueDate } : {}),
     randomize: randomize === true,
     ...(isDifficulty(difficulty) ? { difficulty } : {}),
+    ...(typeof questionSeconds === 'number' ? { questionSeconds } : {}),
     questions: parsedQuestions as CreateQuizRequest['questions'],
   };
 }
@@ -121,6 +123,7 @@ function toQuizContent(
   dueDate?: Date | null;
   randomize?: boolean;
   difficulty?: string;
+  questionSeconds?: number | null;
   gradeLevel?: string;
   questions: Array<{ questionText: string; options: string[]; points: number; correctAnswerIndex?: number; explanation?: string }>;
   createdBy: unknown;
@@ -139,6 +142,7 @@ function toQuizContent(
     ...(quiz.dueDate ? { dueDate: quiz.dueDate.toISOString() } : {}),
     randomize: quiz.randomize === true,
     ...(isDifficulty(quiz.difficulty) ? { difficulty: quiz.difficulty } : {}),
+    ...(quiz.questionSeconds ? { questionSeconds: quiz.questionSeconds } : {}),
     gradeLevel: (quiz.gradeLevel ?? 'ALL') as ContentGrade,
     // Correct answers are deliberately left out of what students receive.
     questions: quiz.questions.map(({ questionText, options, points, correctAnswerIndex, explanation }) => ({
@@ -245,6 +249,7 @@ function quizFields(request: CreateQuizRequest) {
     dueDate: request.dueDate ? new Date(request.dueDate) : null,
     randomize: request.randomize === true,
     ...(request.difficulty ? { difficulty: request.difficulty } : { difficulty: undefined }),
+    questionSeconds: request.questionSeconds,
     isDraft: request.draft === true,
     publishAt: request.publishAt ? new Date(request.publishAt) : null,
     questions: request.questions,

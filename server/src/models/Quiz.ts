@@ -15,6 +15,7 @@ export interface IQuiz extends Document {
   dueDate?: Date | null;
   randomize: boolean;
   difficulty?: string;
+  questionSeconds?: number;
   publishAt?: Date | null;
   isDraft?: boolean;
   gradeLevel?: string;
@@ -41,6 +42,7 @@ const quizSchema = new Schema<IQuiz>(
     timeLimitMinutes: { type: Number, min: 1, max: 600 },
     dueDate: { type: Date, default: null },
     randomize: { type: Boolean, default: false },
+    questionSeconds: { type: Number, min: 5, max: 120 },
     publishAt: { type: Date },
     isDraft: { type: Boolean, default: false },
     difficulty: { type: String, enum: ['EASY', 'MEDIUM', 'INTERMEDIATE', 'HARD'] },

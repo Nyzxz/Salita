@@ -16,6 +16,9 @@ import { gradeLabel } from '../ui/GradeSelect';
 import { Notice } from '../ui/Notice';
 import { PageIntro } from '../ui/PageIntro';
 import { QuizReview } from './QuizReview';
+import { QuizGameResult } from './QuizGameResult';
+import { QuizGameTake } from './QuizGameTake';
+import { loadString, saveString } from '../../lib/localSet';
 import { ArrowLeftIcon, ArrowRightIcon, CheckIcon, ClockIcon, QuizIcon } from '../common/icons';
 
 interface QuestionLayout {
@@ -98,6 +101,8 @@ export function AssignedQuizzes() {
   const [layout, setLayout] = useState<QuestionLayout[]>([]);
   const [flagged, setFlagged] = useState<number[]>([]);
   const [confirming, setConfirming] = useState(false);
+  const [gameMode, setGameMode] = useState(() => loadString('salita.quiz.game') !== '0');
+  const [quizXp, setQuizXp] = useState(0);
   const userId = session?.user.id ?? '';
   const [latestAttempt, setLatestAttempt] = useState<QuizAttemptRecord | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -143,6 +148,7 @@ export function AssignedQuizzes() {
       const draft = loadQuizDraft(userId, quiz);
       setAnswers(draft?.answers ?? (Array(quiz.questions.length).fill(-1) as number[]));
       setLayout(draft?.layout ?? buildLayout(quiz));
+      setQuizXp(0);
       setFlagged(draft?.flagged ?? []);
       setConfirming(false);
       setLatestAttempt(null);
@@ -243,7 +249,32 @@ export function AssignedQuizzes() {
             )}
           </div>
 
-          {layout.map(({ questionIndex, optionOrder }, position) => {
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-xs text-muted">{gameMode ? 'Game mode: one question at a time, with XP, combos and sound.' : 'Classic mode: all questions on one page.'}</p>
+            <button
+              type="button"
+              className="btn-ghost btn-sm"
+              onClick={() => { const next = !gameMode; setGameMode(next); saveString('salita.quiz.game', next ? '1' : '0'); }}
+            >
+              {gameMode ? 'Switch to classic' : 'Switch to game mode'}
+            </button>
+          </div>
+
+          {gameMode && layout.length > 0 && !confirming && (
+            <QuizGameTake
+              quiz={selectedQuiz}
+              layout={layout}
+              answers={answers}
+              flagged={flagged}
+              onAnswer={(questionIndex, optionIndex) => setAnswers((current) => current.map((answer, index) => (index === questionIndex ? optionIndex : answer)))}
+              onToggleFlag={toggleFlag}
+              onFinish={() => setConfirming(true)}
+              onXp={(amount) => setQuizXp((current) => current + amount)}
+              xp={quizXp}
+            />
+          )}
+
+          {!gameMode && layout.map(({ questionIndex, optionOrder }, position) => {
             const question = selectedQuiz.questions[questionIndex];
             return (
               <fieldset key={questionIndex} className="flex flex-col gap-3">
@@ -322,7 +353,7 @@ export function AssignedQuizzes() {
                 <p className="mt-3 text-xs text-clay">Unanswered questions will count as wrong.</p>
               )}
             </div>
-          ) : (
+          ) : gameMode ? null : (
             <button type="button" onClick={() => setConfirming(true)} className="btn-primary self-start">
               Review and submit
             </button>
@@ -333,6 +364,7 @@ export function AssignedQuizzes() {
           <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-leaf/15 text-leaf">
             <CheckIcon className="h-6 w-6" />
           </span>
+          {gameMode && <div className="mt-6"><QuizGameResult attempt={latestAttempt} quizXp={quizXp} userId={userId} /></div>}
           <h3 className="mt-4 text-xl font-semibold text-parchment">Quiz submitted</h3>
           <p className="mt-1 text-xs text-muted">Your answers are reviewed below. Your teacher can open a retake if you need one.</p>
           <p className="mt-3 font-display text-5xl font-semibold text-gradient-gold">{latestAttempt.percentageScore}%</p>

@@ -9,6 +9,8 @@ import { EmptyState } from '../ui/EmptyState';
 import { Notice } from '../ui/Notice';
 import { PageIntro } from '../ui/PageIntro';
 import { gradeLabel } from '../ui/GradeSelect';
+import { addXp, getXp, levelFor } from '../../lib/xp';
+import { LectureJourney } from './LectureJourney';
 
 /** About 200 words a minute, never less than one minute. */
 function readingMinutes(lecture: LectureRecord): number {
@@ -26,6 +28,7 @@ export function AuthoredLectures() {
   const [read, setRead] = useState<Set<string>>(() => loadStringSet(readKey));
   const [lastId, setLastId] = useState<string | null>(() => loadString(lastKey));
   const [openId, setOpenId] = useState<string | null>(null);
+  const [xp, setXp] = useState(() => getXp(userId));
 
   useEffect(() => {
     let active = true;
@@ -37,14 +40,20 @@ export function AuthoredLectures() {
     return () => { active = false; };
   }, [session?.token]);
 
-  const toggleOpen = (id: string) => {
-    const opening = openId !== id;
-    setOpenId(opening ? id : null);
-    if (opening) {
-      setLastId(id);
-      saveString(lastKey, id);
-    }
+  const openJourney = (id: string) => {
+    setOpenId(id);
+    setLastId(id);
+    saveString(lastKey, id);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
+
+  const markRead = (id: string) =>
+    setRead((current) => {
+      if (current.has(id)) return current;
+      const next = new Set(current).add(id);
+      saveStringSet(readKey, next);
+      return next;
+    });
 
   const toggleRead = (id: string) => {
     setRead((current) => {
@@ -56,11 +65,28 @@ export function AuthoredLectures() {
     });
   };
 
+  const level = levelFor(xp);
+  const journeyLecture = lectures.find((lecture) => lecture.id === openId) ?? null;
   const readCount = lectures.filter((lecture) => read.has(lecture.id)).length;
   const resume = useMemo(
     () => lectures.find((lecture) => lecture.id === lastId && !read.has(lecture.id)) ?? lectures.find((lecture) => !read.has(lecture.id)),
     [lectures, lastId, read],
   );
+
+  if (journeyLecture) {
+    const firstTime = !read.has(journeyLecture.id);
+    return (
+      <section aria-label={`Lecture: ${journeyLecture.word}`} className="flex flex-col gap-4">
+        <LectureJourney
+          lecture={journeyLecture}
+          others={lectures.filter((other) => other.id !== journeyLecture.id)}
+          onXp={(amount) => { if (firstTime) setXp(addXp(userId, amount)); }}
+          onComplete={() => markRead(journeyLecture.id)}
+          onClose={() => setOpenId(null)}
+        />
+      </section>
+    );
+  }
 
   return (
     <section aria-labelledby="teacher-lectures-heading" className="flex flex-col gap-6">
@@ -73,6 +99,19 @@ export function AuthoredLectures() {
       {error && <Notice tone="error">{error}</Notice>}
 
       {lectures.length > 0 && (
+        <div className="surface flex flex-wrap items-center gap-4 p-5" aria-label="Your XP">
+          <span className="flex h-12 w-12 flex-none items-center justify-center rounded-full bg-gold/15 font-display text-lg font-semibold text-gold">{level.level}</span>
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-medium text-parchment">Level {level.level} · {xp} XP</p>
+            <div className="mt-2 h-2 overflow-hidden rounded-full bg-white/10" role="progressbar" aria-valuemin={0} aria-valuemax={level.size} aria-valuenow={level.into}>
+              <div className="h-full rounded-full bg-gold transition-all" style={{ width: `${(level.into / level.size) * 100}%` }} />
+            </div>
+          </div>
+          <p className="text-xs text-muted">Earn XP for every card, checkpoint and finished lecture.</p>
+        </div>
+      )}
+
+      {lectures.length > 0 && (
         <div className="surface flex flex-col gap-3 p-5 sm:flex-row sm:items-center sm:justify-between">
           <div className="min-w-0 flex-1">
             <p className="text-sm font-medium text-parchment">{readCount} of {lectures.length} lectures read</p>
@@ -81,7 +120,7 @@ export function AuthoredLectures() {
             </div>
           </div>
           {resume ? (
-            <button type="button" className="btn-secondary btn-sm flex-none" onClick={() => { setOpenId(resume.id); setLastId(resume.id); saveString(lastKey, resume.id); document.getElementById(`lecture-${resume.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }); }}>
+            <button type="button" className="btn-secondary btn-sm flex-none" onClick={() => openJourney(resume.id)}>
               {read.size === 0 && !lastId ? 'Start with' : 'Continue with'} “{resume.word}”
             </button>
           ) : (
@@ -100,7 +139,6 @@ export function AuthoredLectures() {
         <ul className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
           {lectures.map((lecture) => {
             const isRead = read.has(lecture.id);
-            const isOpen = openId === lecture.id;
             return (
               <li id={`lecture-${lecture.id}`} key={lecture.id} className="surface-interactive flex flex-col p-6">
                 <div className="flex items-start justify-between gap-3">
@@ -113,18 +151,15 @@ export function AuthoredLectures() {
                 </div>
                 <p className="mt-1.5 text-sm font-medium text-gold">{lecture.translation}</p>
                 <p className="mt-0.5 text-xs italic text-muted">/{lecture.phonetic}/</p>
-                <p className={`mt-4 text-sm leading-relaxed text-muted ${isOpen ? '' : 'line-clamp-3'}`}>{lecture.historicalContext}</p>
-                {isOpen && lecture.etymologyOrigin && (
-                  <p className="pt-4"><span className="badge-gold">Origin · {lecture.etymologyOrigin}</span></p>
-                )}
+                <p className="mt-4 line-clamp-2 text-sm leading-relaxed text-muted">{lecture.historicalContext}</p>
                 <div className="mt-auto flex flex-wrap items-center justify-between gap-2 pt-4">
-                  <span className="text-xs text-muted">{readingMinutes(lecture)} min read</span>
+                  <span className="text-xs text-muted">{readingMinutes(lecture)} min · up to 80 XP</span>
                   <span className="flex gap-2">
-                    <button type="button" className="btn-ghost btn-sm" aria-expanded={isOpen} onClick={() => toggleOpen(lecture.id)}>
-                      {isOpen ? 'Show less' : 'Read'}
-                    </button>
-                    <button type="button" className={isRead ? 'btn-secondary btn-sm' : 'btn-primary btn-sm'} aria-pressed={isRead} onClick={() => toggleRead(lecture.id)}>
-                      {isRead ? 'Mark unread' : 'Mark as read'}
+                    {isRead && (
+                      <button type="button" className="btn-ghost btn-sm" aria-pressed={isRead} onClick={() => toggleRead(lecture.id)}>Mark unread</button>
+                    )}
+                    <button type="button" className={isRead ? 'btn-secondary btn-sm' : 'btn-primary btn-sm'} onClick={() => openJourney(lecture.id)}>
+                      {isRead ? 'Replay' : lastId === lecture.id ? 'Continue' : 'Start journey'}
                     </button>
                   </span>
                 </div>
